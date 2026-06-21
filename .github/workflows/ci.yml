@@ -79,7 +79,8 @@ jobs:
       - run: pnpm test:e2e
         env:
           PUBLIC_SUPABASE_URL: http://localhost:54321
-          PUBLIC_SUPABASE_PUBLISHABLE_KEY: e2e-anonymous-placeholder
+          # Value is irrelevant — anonymous E2E makes no Supabase calls.
+          PUBLIC_SUPABASE_PUBLISHABLE_KEY: unused # gitleaks:allow
 
   security:
     name: Security — SAST · SCA · secret scan
