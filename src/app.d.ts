@@ -20,7 +20,7 @@ declare global {
 			claims: SessionClaims | null;
 		}
 		interface PageData {
-			session: Session | null;
+			signedIn: boolean;
 		}
 		// interface Error {}
 		// interface PageState {}

@@ -6,7 +6,7 @@
 <nav>
 	<a href="/">Clover</a>
 	<span class="spacer"></span>
-	{#if page.data.session}
+	{#if page.data.signedIn}
 		<a href="/account">Account</a>
 	{:else}
 		<a href="/login">Log in</a>
