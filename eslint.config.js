@@ -13,7 +13,9 @@ export default ts.config(
 		},
 		rules: {
 			// "no clever tricks" + AI-decodability: `any` defeats the type contracts.
-			'@typescript-eslint/no-explicit-any': 'error'
+			'@typescript-eslint/no-explicit-any': 'error',
+			// Plain internal hrefs are clearer than resolve() wrappers for this app.
+			'svelte/no-navigation-without-resolve': 'off'
 		}
 	},
 	{

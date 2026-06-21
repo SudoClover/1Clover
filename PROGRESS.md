@@ -14,23 +14,20 @@ runner) · ⛔ Blocked.
 
 ## Current session
 
-- **Phase:** Slice 0 — Foundation & CI spine (implementation, branch
-  `slice-0-foundation`).
+- **Phase:** Slice 1 — Auth & profiles (implementation, branch `slice-1-auth`).
 - **Last update:** 2026-06-21.
-- **Reviewer-agent gate:** PASSED — fresh-context, read-only review returned
-  **APPROVE WITH NITS** (no secrets, no scope creep, all local gates re-verified).
-  Substantive findings fixed on the branch (see decisions log).
-- **Last CI status:** No remote yet, so CI has **not** run (CI is the authority on
-  "done" — Slice 0 is therefore *not* complete). **Locally verified green:**
-  `typecheck`, `test` (1 unit), `lint` (prettier + eslint), `build`
-  (adapter-cloudflare), Playwright E2E smoke. **Not locally verified** (wired for
-  CI): the `database` job (Docker daemon not running here) and the `security` job
-  (gitleaks/semgrep not installed locally; `pnpm audit` ran clean — 1 low).
-- **Concrete next step:** Overseer has created the GitHub repo + Cloudflare +
-  Supabase Pro accounts (nothing wired yet). Next: connect the git remote and push
-  `slice-0-foundation` so CI runs the full matrix (need the repo URL); then wire CI
-  secrets + link the Supabase/Cloudflare projects (⛔#2/💳). Once CI is green on its
-  runner, mark Slice 0 ✅ and start **Slice 1 — Auth & profiles**.
+- **Slice 0:** ✅ DONE — merged via [PR #1](https://github.com/SudoClover/1Clover/pull/1)
+  (`e1e1299`), all 4 CI jobs green on the runner. `main` is branch-protected
+  (requires the 4 checks + a PR; no force-push/delete; admin override retained).
+- **Slice 1 #2 gate:** APPROVED by overseer. Decisions: require email
+  confirmation; public browsing + sign-in to participate; add `birthdate` column
+  now but defer the under-16 enforcement to Slice 13.
+- **Concrete next step:** Build Slice 1 on `slice-1-auth`: `profiles` table +
+  signup trigger + RLS (+ pgTAP), per-request Supabase client, `getClaims` route
+  guard in `hooks.server.ts`, signup/login/logout/reset routes, a members-only
+  page, integration + E2E tests. Then open a PR (reviewer-agent gate + CI) for the
+  overseer to merge. Slice 1 needs **no secrets** — verified against local Supabase
+  in CI.
 
 ---
 
@@ -40,11 +37,12 @@ These are the ❓ items from [ASSUMPTIONS.md](ASSUMPTIONS.md) — confirm before
 slice that depends on them:
 
 - [ ] **Operating jurisdiction = Germany?** (drives Impressum + age threshold) — needed by Slice 13, ideally sooner.
-- [ ] **Anonymous browsing allowed?** (default: yes, read-only) — affects RLS in Slice 1/3.
+- [x] **Anonymous browsing allowed?** ✅ Yes — public read of approved content/profiles; writes require a verified account. (Confirmed 2026-06-21.)
 - [ ] **Minimum age = 16?** — needed by Slice 13 (age gate).
 - [ ] **Follows + Friends as two separate graphs?** (default: yes) — needed by Slice 10.
 - [ ] **Rating model = single like/upvote?** (default: yes) — needed by Slice 6.
-- [ ] **#2/💳 gate:** approve creating Supabase/Cloudflare projects + enabling Supabase Pro (~$25/mo) — needed to finish Slice 0.
+- [x] **#2/💳 gate:** Supabase Pro + Cloudflare accounts created. (Remote project *wiring* — keys/deploy — still pending; needed only for a live deploy, not for Slice 1 CI.)
+- [ ] **Minimum age value = 16?** still to confirm with jurisdiction before Slice 13 (column added now).
 
 ---
 
@@ -52,8 +50,8 @@ slice that depends on them:
 
 | # | Slice | Status | Last test/CI | Notes |
 |---|---|---|---|---|
-| 0 | Foundation & CI spine | 🟡 In progress | local: quality+unit+build+e2e green; DB/security pending CI | Scaffold done on `slice-0-foundation`. Needs remote (CI) + overseer projects/creds (⛔#2/💳) |
-| 1 | Auth & profiles | ⬜ Not started | — | |
+| 0 | Foundation & CI spine | ✅ Done | CI green on runner (all 4 jobs) | Merged via PR #1 (`e1e1299`); `main` branch-protected |
+| 1 | Auth & profiles | 🟡 In progress | building on `slice-1-auth` | email verify + public profiles + birthdate column (age enforced later) |
 | 2 | Media upload spine (image → board) | ⬜ Not started | — | The proof-of-spine slice |
 | 3 | Posts & the board proper | ⬜ Not started | — | |
 | 4 | Tags, metadata & similar posts | ⬜ Not started | — | |
@@ -78,6 +76,11 @@ seam (💳⛔#2) · OAuth/MFA · native mobile. (See [ROADMAP.md](ROADMAP.md).)
 > Significant decisions get an [ADR](docs/adr/); this is the quick chronological
 > index. Product/legal/tech assumptions live in [ASSUMPTIONS.md](ASSUMPTIONS.md).
 
+- **2026-06-21** — Slice 1 (#2 auth gate) APPROVED. Choices: email confirmation
+  required; public browsing + sign-in to participate; `birthdate` column added now,
+  under-16 enforcement deferred to Slice 13. Email/password only at launch
+  (OAuth/MFA later). Also: Slice 0 merged (PR #1, `e1e1299`) + `main` branch
+  protection enabled (4 required checks, PR-only, no force-push/delete).
 - **2026-06-21** — Slice 0 reviewer-agent gate (fresh context, read-only):
   **APPROVE WITH NITS**. Fixed: M1 (seed `sql_paths` → no-match glob so `db reset`
   doesn't choke on a missing `seed.sql`), M2 (`schema_paths` wired to

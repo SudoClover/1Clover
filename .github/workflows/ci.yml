@@ -30,10 +30,16 @@ jobs:
       - run: pnpm build
 
   database:
-    name: Migrations · pgTAP RLS tests
+    name: Migrations · pgTAP · integration tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - uses: supabase/setup-cli@v1
         with:
           version: 2.107.0 # pinned for reproducible gates (matches the supabase devDep)
@@ -43,6 +49,16 @@ jobs:
         run: supabase db reset
       - name: Run pgTAP tests
         run: supabase test db
+      - name: Export local Supabase keys for the integration tests
+        run: |
+          eval "$(supabase status -o env)"
+          {
+            echo "PUBLIC_SUPABASE_URL=$API_URL"
+            echo "PUBLIC_SUPABASE_PUBLISHABLE_KEY=$PUBLISHABLE_KEY"
+            echo "SUPABASE_SECRET_KEY=$SECRET_KEY"
+          } >> "$GITHUB_ENV"
+      - name: Integration tests (Vitest vs local Supabase)
+        run: pnpm test:integration
       - if: always()
         run: supabase stop
 
@@ -58,7 +74,13 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
+      # Anonymous-only E2E needs no database, just non-empty public env so the
+      # per-request Supabase client can be constructed.
       - run: pnpm test:e2e
+        env:
+          PUBLIC_SUPABASE_URL: http://localhost:54321
+          # Value is irrelevant — anonymous E2E makes no Supabase calls.
+          PUBLIC_SUPABASE_PUBLISHABLE_KEY: unused # gitleaks:allow
 
   security:
     name: Security — SAST · SCA · secret scan

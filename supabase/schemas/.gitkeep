@@ -1,3 +1,0 @@
-# Declarative schema files (the source of truth) live here — see ADR-0011 and
-# CLAUDE.md §5. The first tables + RLS arrive in Slice 1. `supabase db diff`
-# generates timestamped migrations into ../migrations/ from these files.
