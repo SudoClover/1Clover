@@ -1,0 +1,46 @@
+{
+	"name": "clover",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"packageManager": "pnpm@11.8.0",
+	"engines": {
+		"node": ">=22.13"
+	},
+	"scripts": {
+		"dev": "vite dev",
+		"build": "vite build",
+		"preview": "vite preview",
+		"prepare": "svelte-kit sync",
+		"typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"lint": "prettier --check . && eslint .",
+		"format": "prettier --write .",
+		"format:check": "prettier --check .",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"test:e2e": "playwright test",
+		"db:start": "supabase start",
+		"db:reset": "supabase db reset",
+		"db:test": "supabase test db",
+		"db:types": "supabase gen types typescript --local > src/lib/types/database.ts"
+	},
+	"devDependencies": {
+		"@eslint/js": "^10.0.1",
+		"@playwright/test": "^1.61.0",
+		"@sveltejs/adapter-cloudflare": "^7.2.9",
+		"@sveltejs/kit": "^2.66.0",
+		"@sveltejs/vite-plugin-svelte": "^7.1.2",
+		"eslint": "^10.5.0",
+		"eslint-plugin-svelte": "^3.19.0",
+		"globals": "^17.6.0",
+		"prettier": "^3.8.4",
+		"prettier-plugin-svelte": "^4.1.1",
+		"supabase": "^2.107.0",
+		"svelte": "^5.56.3",
+		"svelte-check": "^4.6.0",
+		"typescript": "^6.0.3",
+		"typescript-eslint": "^8.61.1",
+		"vite": "^8.0.16",
+		"vitest": "^4.1.9"
+	}
+}

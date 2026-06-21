@@ -1,0 +1,7 @@
+# Wrangler local secrets for the Worker(s). Copy to `.dev.vars` (git-ignored).
+# Mirrors the SERVER-ONLY values from .env.example. In production these are set
+# with `wrangler secret put`, never committed. PLACEHOLDER NAMES ONLY.
+SUPABASE_SECRET_KEY="sb_secret_xxx"
+R2_ACCESS_KEY_ID="xxx"
+R2_SECRET_ACCESS_KEY="xxx"
+TURNSTILE_SECRET_KEY="0xBBBB_turnstile_secret_key"

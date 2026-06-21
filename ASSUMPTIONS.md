@@ -45,7 +45,7 @@
 | 🔧 | **Auth methods at launch**: email/password **with email verification + password reset**. OAuth (Google) and MFA **deferred** behind a clean seam (Supabase supports both with config, no schema change) | Minimal secure baseline; OAuth needs provider app registration (overseer task) so it's a fast-follow, not launch-blocking |
 | 🔧 | **Auth gate**: authorize only via `getClaims()` (or `getUser()` when a fresh record is needed) — **never `getSession()`** | Hard security rule; `getSession()` is unverified/spoofable |
 | 🔧 | **Posts may hold multiple media** (carousel) via a `post_media` join table; media exists independently in the user's **library** and can be posted later or downloaded | Supports "save to library / post directly / download" from the brief |
-| 🔧 | **Package manager**: pnpm; **Node 20 LTS**; TypeScript `strict`, `noUncheckedIndexedAccess` | Fast, strict, monorepo-friendly |
+| 🔧 | **Package manager**: pnpm; **Node 24 in CI** (pnpm 11.8 requires ≥22.13; engines floor `>=22.13`); TypeScript `strict`, `noUncheckedIndexedAccess` | Fast, strict, monorepo-friendly |
 | 🔧 | **Svelte 5 (runes)**; `@sveltejs/adapter-cloudflare` | Current stable; Workers target |
 | 🔧 | **Supabase region**: Frankfurt (`eu-central-1`); **R2** originals in EU jurisdiction where configurable | EU residency posture |
 | 🔧 | **Queue consumer** is a **separate Cloudflare Worker** (not inline in the SvelteKit request worker) | Heavy/async media work off the request path |

@@ -1,0 +1,7 @@
+# Allow these trusted native packages to run build scripts (pnpm blocks build
+# scripts by default for supply-chain safety). esbuild + workerd are needed to
+# build/run; sharp is used by the media pipeline in later slices.
+allowBuilds:
+  esbuild: true
+  sharp: true
+  workerd: true

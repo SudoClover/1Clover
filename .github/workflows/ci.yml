@@ -1,0 +1,91 @@
+name: CI
+
+# Every gate that must pass before merge (CLAUDE.md §7). CI on its own runner is
+# the authority on "done" — never agent-pasted output (Autonomy guardrail #4).
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Lint · typecheck · unit · build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      # `pnpm install` runs the `prepare` script (svelte-kit sync), which generates
+      # .svelte-kit/tsconfig.json that lint + typecheck depend on.
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+  database:
+    name: Migrations · pgTAP RLS tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.107.0 # pinned for reproducible gates (matches the supabase devDep)
+      - name: Start local Supabase
+        run: supabase start
+      - name: Rebuild DB from migrations (must be clean)
+        run: supabase db reset
+      - name: Run pgTAP tests
+        run: supabase test db
+      - if: always()
+        run: supabase stop
+
+  e2e:
+    name: Playwright E2E
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+
+  security:
+    name: Security — SAST · SCA · secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # gitleaks scans full history
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Secret scan (gitleaks)
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz \
+            | tar -xz gitleaks
+          ./gitleaks dir . --redact --no-banner --verbose
+
+      - name: Dependency audit (SCA)
+        run: pnpm audit --audit-level=high
+
+      - name: Static analysis (SAST — Semgrep OSS)
+        # TODO: pin Semgrep to an explicit version after the first known-good CI run
+        # (avoids guessing a version that may not exist and breaking the gate).
+        run: |
+          pipx install semgrep || pip install semgrep
+          semgrep scan --config p/typescript --config p/security-audit --error --quiet
