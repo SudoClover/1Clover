@@ -10,7 +10,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 };
 
 export const actions: Actions = {
-	// Edit/delete are owner-only via RLS (a non-owner write simply affects zero rows);
+	// Edit/delete are owner-only via RLS (a non-owner write affects zero rows → 403);
 	// the UI also only renders these controls to the owner.
 	edit: async ({ request, params, locals }) => {
 		if (!locals.claims) error(401, 'Sign in to edit.');
@@ -20,12 +20,14 @@ export const actions: Actions = {
 			description: String(form.get('description') ?? '')
 		});
 		if (errors.length > 0) return fail(400, { errors });
-		await updatePost(locals.supabase, params.id, value);
+		if (!(await updatePost(locals.supabase, params.id, value)))
+			error(403, 'You can only edit your own post.');
 		return { edited: true };
 	},
 	delete: async ({ params, locals }) => {
 		if (!locals.claims) error(401, 'Sign in to delete.');
-		await deletePost(locals.supabase, params.id);
+		if (!(await deletePost(locals.supabase, params.id)))
+			error(403, 'You can only delete your own post.');
 		redirect(303, '/');
 	}
 };

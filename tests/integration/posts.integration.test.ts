@@ -129,7 +129,10 @@ describe('posts (integration)', () => {
 		expect(await getPostById(anon(), postId)).toBeNull();
 		expect(await getPostById(bob.client, postId)).toBeNull();
 		expect((await getBoardPage(anon())).cards.find((c) => c.id === postId)).toBeUndefined();
-		// The author still sees their own held post.
+		// Even the AUTHOR's own board excludes their held post (the explicit approved
+		// filter, not just anon RLS, keeps non-approved off the public board).
+		expect((await getBoardPage(alice.client)).cards.find((c) => c.id === postId)).toBeUndefined();
+		// The author still sees their own held post on its detail page.
 		expect((await getPostById(alice.client, postId))?.id).toBe(postId);
 	});
 
@@ -141,20 +144,24 @@ describe('posts (integration)', () => {
 			mediaIds: [mediaId]
 		});
 
-		// Non-owner edit is a no-op (RLS row filter): nothing changes.
-		await updatePost(bob.client, postId, { title: 'Hijacked', description: 'nope' });
+		// Non-owner edit affects zero rows (RLS) → returns false; nothing changes.
+		expect(await updatePost(bob.client, postId, { title: 'Hijacked', description: 'nope' })).toBe(
+			false
+		);
 		expect((await getPostById(anon(), postId))?.title).toBe('Original');
 
-		// Owner edit applies and the trigger stamps edited_at.
-		await updatePost(alice.client, postId, { title: 'Edited', description: 'updated' });
+		// Owner edit applies (returns true) and the trigger stamps edited_at.
+		expect(
+			await updatePost(alice.client, postId, { title: 'Edited', description: 'updated' })
+		).toBe(true);
 		const edited = await getPostById(anon(), postId);
 		expect(edited?.title).toBe('Edited');
 		expect(edited?.editedAt).not.toBeNull();
 
-		// Non-owner delete is a no-op; owner delete removes it.
-		await deletePost(bob.client, postId);
+		// Non-owner delete is a no-op (false); owner delete removes it (true).
+		expect(await deletePost(bob.client, postId)).toBe(false);
 		expect((await getPostById(anon(), postId))?.id).toBe(postId);
-		await deletePost(alice.client, postId);
+		expect(await deletePost(alice.client, postId)).toBe(true);
 		expect(await getPostById(anon(), postId)).toBeNull();
 	});
 

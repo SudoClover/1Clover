@@ -111,24 +111,28 @@ export async function createPost(
 	return data;
 }
 
-/** Edit own post's title/description. RLS limits this to the author; the DB trigger
- *  stamps edited_at. Affects zero rows (no error) for a non-owner. */
+/** Edit own post's title/description; the DB trigger stamps edited_at. RLS limits this
+ *  to the author, so a non-owner affects zero rows — returns false (caller maps to 403). */
 export async function updatePost(
 	client: DbClient,
 	postId: string,
 	fields: { title: string; description: string | null }
-): Promise<void> {
-	const { error } = await client
+): Promise<boolean> {
+	const { data, error } = await client
 		.from('posts')
 		.update({ title: fields.title, description: fields.description })
-		.eq('id', postId);
+		.eq('id', postId)
+		.select('id');
 	if (error) throw error;
+	return (data?.length ?? 0) > 0;
 }
 
-/** Delete own post (cascades post_media). RLS limits this to the author. */
-export async function deletePost(client: DbClient, postId: string): Promise<void> {
-	const { error } = await client.from('posts').delete().eq('id', postId);
+/** Delete own post (cascades post_media). RLS limits this to the author, so a non-owner
+ *  affects zero rows — returns false. */
+export async function deletePost(client: DbClient, postId: string): Promise<boolean> {
+	const { data, error } = await client.from('posts').delete().eq('id', postId).select('id');
 	if (error) throw error;
+	return (data?.length ?? 0) > 0;
 }
 
 /** The caller's own approved+ready media — the pool they can attach to a new post. */

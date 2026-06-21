@@ -23,7 +23,7 @@ export interface PostInput extends PostFields {
 	mediaIds: string[];
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Trim title/description; collapse an empty/whitespace description to null. */
 function normalizeFields(raw: { title: string; description?: string | null }): PostFields {
