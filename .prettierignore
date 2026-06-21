@@ -1,0 +1,12 @@
+# Long-form prose docs are hand-maintained (intentional 80-col wrapping + tables)
+*.md
+
+# Generated / vendored — not ours to format
+.svelte-kit/
+build/
+dist/
+.wrangler/
+node_modules/
+pnpm-lock.yaml
+supabase/migrations/
+src/lib/types/database.ts
