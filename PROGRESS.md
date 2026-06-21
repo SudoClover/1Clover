@@ -14,9 +14,9 @@ runner) · ⛔ Blocked.
 
 ## Current session
 
-- **Phase:** Slice 3 — Posts & the board proper. **IMPLEMENTATION COMPLETE locally**
-  on branch `slice-3-posts-board` (off `main`); awaiting CI on its own runner + the
-  reviewer gate before merge.
+- **Phase:** Slice 3 — Posts & the board proper **✅ DONE & merged** (PR #4: `8d37b3b`
+  + review-fix `a4c50fa`, merge `fbf62da`; all 4 CI jobs green; reviewer gate APPROVE).
+  **Next: Slice 4 — Tags, metadata & "similar posts"** (start in a fresh session).
 - **Last update:** 2026-06-22.
 - **Slices 0–2:** ✅ DONE & merged — PR #1 (`e1e1299`), PR #2 (`2463c36`), **PR #3
   (`aafd78a` / merge `11d0255`)**. Slice 2 reviewer gate APPROVE WITH NITS (applied);
@@ -26,40 +26,23 @@ runner) · ⛔ Blocked.
   the overseer at the deploy gate. (Built media: `media` table, `upload-policy` domain,
   `runMediaPipeline` + seams, `/api/upload`, `/media/[...key]`, consumer worker; see
   [ADR-0012](docs/adr/0012-slice2-media-spine-buildtest.md).)
-- **Slice 3 — built end-to-end; ALL local suites green; not committed yet:**
-  - **DB:** `supabase/schemas/03_posts.sql` — `posts` (id, author_id, title≤140,
-    description≤2000, moderation_state default **approved**, created_at, edited_at) +
-    `post_media` (post_id, media_id, position, PK) + RLS + `edited_at` trigger + the
-    **`create_post(p_title, p_description, p_media_ids[])` RPC** (SECURITY INVOKER →
-    atomic post+links under RLS; author_id from `auth.uid()`; execute granted to
-    `authenticated` only). Migration `20260621221225_create_posts.sql` hand-reviewed:
-    **both table `REVOKE ALL` + the function `REVOKE EXECUTE FROM public,anon` hand-added**
-    (diff drops them — security-critical). pgTAP `03_posts_rls.test.sql` now **29 tests**
-    (added has_function + execute-privilege). Types regenerated (includes `create_post`).
-  - **Domain (pure):** `src/lib/domain/posts/post-input.ts` (+`types.ts`) — title/description
-    caps, ≥1-media + cap(20) + uuid checks, trim/dedupe. Unit-tested.
-  - **Server:** `src/lib/server/db/posts.ts` — `getBoardPage` (keyset cursor on
-    `(created_at,id)`, cover = lowest-`position` approved+ready thumb), `getPostById`,
-    `createPost` (RPC), `updatePost`/`deletePost` (RLS), `listPostableMedia`. Uses the
-    **authed per-request client**, not service-role.
-  - **UI:** board `/` rewritten to **posts** (Masonry + PostCard + IntersectionObserver
-    infinite scroll via `/api/board`); `post/[id]` detail (PostDetail) + owner edit/delete;
-    `/create` (pick from own approved library → `create_post`); `/create` added to the
-    authGuard. Title/description rendered as text (`{…}`, never `{@html}`) → escaped.
-  - **Tests green locally:** unit **42**, integration **16** (incl. 6 new two-user posts:
-    create→board→detail, approved-only public + owner-sees-own-held, owner edit/delete +
-    non-owner denied via RLS, atomic rollback when linking unowned media, keyset paging),
-    pgTAP **61**, E2E **7** (board render + served-cover nosniff/webp, board→detail, /create
-    guard), lint clean, typecheck 0/0. New **[ADR-0013](docs/adr/0013-client-writable-posts-atomic-create.md)**.
-  - **NEXT (precise):** commit (conventional `feat:`) → push → **force CI** via PR
-    open/close-reopen (auto-trigger unreliable in this repo) → reviewer-agent gate (fresh
-    context, read-only) → address findings → merge. **Drift audit is due** (Slices 1–3, per
-    CLAUDE.md §11) — run it around this merge.
-  - **E2E note (decision):** UI form-login is **flaky in E2E** (SvelteKit enhance vs
-    hydration race: native submit can land back on `/login`); the repo already keeps UI auth
-    out of E2E (`e2e/auth.test.ts`). So posts E2E seeds via service-role and tests the
-    anonymous board→detail render journey + the `/create` guard; the authed create/edit/delete
-    paths are proven by the posts **integration** suite against real RLS.
+- **Slice 3 (shipped) — what's on `main`:** `posts`/`post_media` + RLS + `edited_at`
+  trigger + the atomic **`create_post`** RPC (SECURITY INVOKER; author from `auth.uid()`;
+  execute → `authenticated` only); pure `src/lib/domain/posts/`; `src/lib/server/db/posts.ts`
+  (keyset board, detail, create/edit/delete, library) on the **authed per-request client**;
+  posts board `/` (Masonry/PostCard + infinite scroll via `/api/board`), `post/[id]` detail,
+  `/create` (guarded). XSS-safe (text render, never `{@html}`). Clients still can't write
+  `moderation_state`/`edited_at`. Tests: 42 unit / 16 integration (two-user RLS, atomic
+  rollback, keyset) / 61 pgTAP / 8 E2E. See [ADR-0013](docs/adr/0013-client-writable-posts-atomic-create.md).
+- **Drift audit (CLAUDE.md §11, Slices 0–3) — 2026-06-22:** **On track; no architectural or
+  security drift.** Confirmed: layers respected, `getClaims()` only, RLS + column grants, no
+  premature columns/tables/features. 3 trivial cleanups applied on `chore/slice-3-followups`:
+  this PROGRESS marked Done, deleted dead `MediaCard.svelte` (Slice-2 leftover, 0 refs), added
+  ADR-0013 to the ADR index. (`posts.ts` at ~208 lines — watch the 200 soft limit if Slice 4 grows it.)
+- **E2E note (still relevant):** UI form-login is a hydration-race flake in Playwright; the repo
+  keeps UI auth out of E2E (`e2e/auth.test.ts`). Authed create/edit/delete are proven by the
+  **integration** suite against real RLS; E2E covers the anonymous board→detail render + the
+  `/create` guard + a malformed-cursor 400.
 - **Out of scope (binding):** tags/metadata (Slice 4), feeds/ranking (Slice 5), ratings
   (Slice 6), comments (Slice 7), similar posts. No counters/`hot_score` columns yet
   (additive in their slices).
@@ -91,7 +74,7 @@ slice that depends on them:
 | 0 | Foundation & CI spine | ✅ Done | CI green on runner (all 4 jobs) | Merged via PR #1 (`e1e1299`); `main` branch-protected |
 | 1 | Auth & profiles | ✅ Done | CI green; reviewer APPROVE WITH NITS | Merged via PR #2 (`2463c36`) |
 | 2 | Media upload spine (image → board) | ✅ Done | CI green (PR #3); reviewer APPROVE WITH NITS | Merged `11d0255`. Deploy items deferred (#2/💳); see ADR-0012 |
-| 3 | Posts & the board proper | 🟡 In progress | all local suites green (42 unit/16 int/61 pgTAP/7 E2E); awaiting CI + reviewer | `slice-3-posts-board`; built end-to-end; see session notes + ADR-0013 |
+| 3 | Posts & the board proper | ✅ Done | CI green (PR #4); reviewer APPROVE; drift audit clean | Merged `fbf62da`. Atomic `create_post` RPC; keyset board; see ADR-0013 |
 | 4 | Tags, metadata & similar posts | ⬜ Not started | — | |
 | 5 | Feeds: New/Hot/Top/Following | ⬜ Not started | — | |
 | 6 | Ratings & vote integrity + rate limit | ⬜ Not started | — | |
