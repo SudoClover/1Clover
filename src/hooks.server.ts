@@ -48,7 +48,10 @@ const authGuard: Handle = async ({ event, resolve }) => {
 	event.locals.claims = claims;
 
 	const path = event.url.pathname;
-	if (!claims && (path.startsWith('/account') || path.startsWith('/upload')))
+	if (
+		!claims &&
+		(path.startsWith('/account') || path.startsWith('/upload') || path.startsWith('/create'))
+	)
 		redirect(303, '/login');
 	if (claims && (path === '/login' || path === '/signup')) redirect(303, '/account');
 

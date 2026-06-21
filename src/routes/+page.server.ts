@@ -1,47 +1,15 @@
-import { variantUrl } from '$lib/media-url';
+import { getBoardPage } from '$lib/server/db/posts';
 import type { PageServerLoad } from './$types';
 
-interface Variants {
-	safe?: string;
-	thumb?: string;
-}
-
-export interface BoardItem {
-	id: string;
-	width: number | null;
-	height: number | null;
-	thumb: string;
-}
-
-// The public board: approved + ready media, newest first. RLS already restricts
-// anon/other users to approved media; the explicit filter mirrors that and uses
-// the partial board index. Only the THUMB variant key is exposed to the client.
+// The public board: approved posts, newest first, each with a cover thumbnail. RLS
+// already restricts anonymous/other users to approved posts; the query mirrors that.
+// A read failure shows an empty board rather than 500-ing the homepage.
 export const load: PageServerLoad = async ({ locals }) => {
-	const { data, error } = await locals.supabase
-		.from('media')
-		.select('id, width, height, variants, created_at')
-		.eq('moderation_state', 'approved')
-		.eq('processing_state', 'ready')
-		.order('created_at', { ascending: false })
-		.limit(60);
-
-	// A board read failure shouldn't 500 the homepage — show an empty board instead.
-	if (error) {
-		console.error('[board] media query failed:', error.message);
-		return { media: [] satisfies BoardItem[] };
+	try {
+		const { cards, nextCursor } = await getBoardPage(locals.supabase);
+		return { cards, nextCursor };
+	} catch (e) {
+		console.error('[board] post query failed:', (e as Error).message);
+		return { cards: [], nextCursor: null };
 	}
-
-	const media: BoardItem[] = (data ?? [])
-		.map((row) => {
-			const variants = (row.variants ?? {}) as Variants;
-			return {
-				id: row.id,
-				width: row.width,
-				height: row.height,
-				thumb: variants.thumb ? variantUrl(variants.thumb) : null
-			};
-		})
-		.filter((item): item is BoardItem => item.thumb !== null);
-
-	return { media };
 };

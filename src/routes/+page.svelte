@@ -1,8 +1,46 @@
 <script lang="ts">
-	import MediaCard from '$lib/components/MediaCard.svelte';
+	import Masonry from '$lib/components/Masonry.svelte';
+	import PostCard from '$lib/components/PostCard.svelte';
+	import type { BoardCard, BoardCursor, BoardPage } from '$lib/domain/posts/types';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
+
+	// Seeded from the server-rendered page; the $effect below re-syncs on a fresh load,
+	// while loadMore() appends to these without resetting them.
+	// svelte-ignore state_referenced_locally
+	let cards = $state<BoardCard[]>(data.cards);
+	// svelte-ignore state_referenced_locally
+	let cursor = $state<BoardCursor | null>(data.nextCursor);
+	let loading = $state(false);
+
+	// Re-sync when the server load runs again (e.g. navigating back to the board).
+	$effect(() => {
+		cards = data.cards;
+		cursor = data.nextCursor;
+	});
+
+	async function loadMore() {
+		if (loading || !cursor) return;
+		loading = true;
+		const params = new URLSearchParams({ cursor_created: cursor.createdAt, cursor_id: cursor.id });
+		const res = await fetch(`/api/board?${params}`);
+		if (res.ok) {
+			const page: BoardPage = await res.json();
+			cards = [...cards, ...page.cards];
+			cursor = page.nextCursor;
+		}
+		loading = false;
+	}
+
+	// Fetch the next page when the bottom sentinel scrolls into view.
+	function sentinel(node: HTMLElement) {
+		const observer = new IntersectionObserver((entries) => {
+			if (entries[0]?.isIntersecting) loadMore();
+		});
+		observer.observe(node);
+		return { destroy: () => observer.disconnect() };
+	}
 </script>
 
 <svelte:head>
@@ -14,20 +52,24 @@
 	<header>
 		<h1>Clover</h1>
 		{#if data.signedIn}
-			<a class="action" href="/upload">Upload an image</a>
+			<a class="action" href="/create">Create a post</a>
 		{:else}
-			<a class="action" href="/login">Sign in to upload</a>
+			<a class="action" href="/login">Sign in to post</a>
 		{/if}
 	</header>
 
-	{#if data.media.length === 0}
-		<p class="empty">No images on the board yet.</p>
+	{#if cards.length === 0}
+		<p class="empty">No posts on the board yet.</p>
 	{:else}
-		<section class="board">
-			{#each data.media as item (item.id)}
-				<MediaCard src={item.thumb} width={item.width} height={item.height} />
+		<Masonry>
+			{#each cards as card (card.id)}
+				<PostCard {card} />
 			{/each}
-		</section>
+		</Masonry>
+		{#if cursor}
+			<div use:sentinel class="sentinel" aria-hidden="true"></div>
+			{#if loading}<p class="loading">Loading more…</p>{/if}
+		{/if}
 	{/if}
 </main>
 
@@ -50,18 +92,11 @@
 	.empty {
 		color: #666;
 	}
-	.board {
-		column-count: 4;
-		column-gap: 1rem;
+	.sentinel {
+		height: 1px;
 	}
-	@media (max-width: 60rem) {
-		.board {
-			column-count: 3;
-		}
-	}
-	@media (max-width: 40rem) {
-		.board {
-			column-count: 2;
-		}
+	.loading {
+		text-align: center;
+		color: #666;
 	}
 </style>
