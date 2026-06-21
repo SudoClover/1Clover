@@ -19,6 +19,7 @@
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"test:integration": "vitest run --config vitest.integration.config.ts",
+		"test:workers": "vitest run --config vitest.workers.config.ts",
 		"test:e2e": "playwright test",
 		"db:start": "supabase start",
 		"db:reset": "supabase db reset",
@@ -26,6 +27,8 @@
 		"db:types": "supabase gen types typescript --local > src/lib/types/database.ts"
 	},
 	"devDependencies": {
+		"@cloudflare/vitest-pool-workers": "^0.16.18",
+		"@cloudflare/workers-types": "^4.20260620.1",
 		"@eslint/js": "^10.0.1",
 		"@playwright/test": "^1.61.0",
 		"@sveltejs/adapter-cloudflare": "^7.2.9",
@@ -38,13 +41,15 @@
 		"globals": "^17.6.0",
 		"prettier": "^3.8.4",
 		"prettier-plugin-svelte": "^4.1.1",
+		"sharp": "^0.35.2",
 		"supabase": "^2.107.0",
 		"svelte": "^5.56.3",
 		"svelte-check": "^4.6.0",
 		"typescript": "^6.0.3",
 		"typescript-eslint": "^8.61.1",
 		"vite": "^8.0.16",
-		"vitest": "^4.1.9"
+		"vitest": "^4.1.9",
+		"wrangler": "^4.103.0"
 	},
 	"dependencies": {
 		"@supabase/ssr": "^0.12.0",

@@ -1,0 +1,17 @@
+# Consumer Worker config (ADR-0007/0012). The R2 bucket + Queue are created at the
+# deploy gate (💳/#2); locally/CI the pool-workers test simulates them via miniflare.
+# Secrets (SUPABASE_URL, SUPABASE_SECRET_KEY) are set with `wrangler secret`, never here.
+name = "clover-media-consumer"
+main = "src/index.ts"
+compatibility_date = "2026-06-21"
+compatibility_flags = ["nodejs_compat"]
+
+[[r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "clover-media"
+
+[[queues.consumers]]
+queue = "media-jobs"
+max_batch_size = 10
+max_retries = 5
+dead_letter_queue = "media-jobs-dlq"

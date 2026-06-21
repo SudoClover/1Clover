@@ -24,7 +24,10 @@ declare global {
 		}
 		// interface Error {}
 		// interface PageState {}
-		// interface Platform {}
+		/** Cloudflare bindings, present in prod/Worker, absent in local dev/CI. */
+		interface Platform {
+			env?: import('$lib/server/media/bindings').MediaBindings;
+		}
 	}
 }
 

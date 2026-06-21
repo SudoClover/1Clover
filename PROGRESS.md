@@ -14,20 +14,54 @@ runner) · ⛔ Blocked.
 
 ## Current session
 
-- **Phase:** Slice 1 — Auth & profiles (implementation, branch `slice-1-auth`).
+- **Phase:** Slice 2 — Media upload spine. **Implementation COMPLETE; all test
+  suites green locally; not yet committed/pushed — awaiting CI on a PR.** (CI is the
+  authority on done — CLAUDE.md §6.)
 - **Last update:** 2026-06-21.
-- **Slice 0:** ✅ DONE — merged via [PR #1](https://github.com/SudoClover/1Clover/pull/1)
-  (`e1e1299`), all 4 CI jobs green on the runner. `main` is branch-protected
-  (requires the 4 checks + a PR; no force-push/delete; admin override retained).
-- **Slice 1 #2 gate:** APPROVED by overseer. Decisions: require email
-  confirmation; public browsing + sign-in to participate; add `birthdate` column
-  now but defer the under-16 enforcement to Slice 13.
-- **Concrete next step:** Build Slice 1 on `slice-1-auth`: `profiles` table +
-  signup trigger + RLS (+ pgTAP), per-request Supabase client, `getClaims` route
-  guard in `hooks.server.ts`, signup/login/logout/reset routes, a members-only
-  page, integration + E2E tests. Then open a PR (reviewer-agent gate + CI) for the
-  overseer to merge. Slice 1 needs **no secrets** — verified against local Supabase
-  in CI.
+- **Slice 0:** ✅ DONE — PR #1 (`e1e1299`). **Slice 1:** ✅ DONE — PR #2 (`2463c36`).
+  `main` is branch-protected (4 required checks + PR-only; no force-push/delete;
+  admin override retained).
+- **Slice 2 — what was built** (the proof-of-spine: authed upload → board):
+  - `media` table + 3 shared enums (`media_kind`/`moderation_state`/`processing_state`)
+    + RLS (public read of approved/ready only; owner reads own; **no client writes**;
+    storage_key/checksum/byte_size hidden) — schema + reviewed migration + pgTAP (19).
+    **Hand-added the `REVOKE ALL` the diff tool drops** (same trap as profiles).
+  - Pure `src/lib/domain/upload-policy/` — magic-byte sniff, **SVG ban**, allowlist,
+    declared/actual mismatch (polyglot/spoof guard), size + pixel/dimension caps. Unit-tested.
+  - `src/lib/server/media/` — dependency-injected `runMediaPipeline` (validate →
+    re-encode → thumbnail → classify → flip state), seams: `MediaStore` (R2 / fs-dev),
+    `ImageProcessor` (sharp Node / Images prod-deferred), `Classifier` (stub), service-role
+    `repo`/sink + `dispatch` (enqueue prod / pending dev).
+  - `POST /api/upload` (auth-gated, server-side row insert + dispatch), `GET /media/[...key]`
+    (dev serving of safe/thumb only, `nosniff`), board `/` + `MediaCard`, `/upload` UI (guarded).
+  - `workers/media-consumer/` (queue handler) + `wrangler.toml`; pool-workers test of the
+    consumer with **real R2 bindings**.
+  - Decisions in **[ADR-0012](docs/adr/0012-slice2-media-spine-buildtest.md)** (no-spend
+    realization of ADR-0007: endpoint-upload now / presign at deploy; sharp-Node-dev vs
+    Images-prod behind the seam; classifier stub).
+- **Local test results (all green):** unit 31 · pgTAP 32 · integration 10 (valid→approved;
+  SVG/mismatch/**corrupt**→failed; RLS) · workers 2 (real R2) · E2E 5 (incl. board renders an
+  approved card, served `image/webp` + `nosniff`). `pnpm build` clean (sharp/node:fs kept out of
+  the workerd bundle). `pnpm audit --audit-level=high` clean. typecheck + lint clean.
+- **Reviewer-agent gate (fresh context, read-only):** **APPROVE WITH NITS** — no Critical/Major.
+  Applied: markFailed no longer writes the reason into client-readable `variants` (logs it);
+  dropped the redundant `media/` key prefix (no more `/media/media/…`); added the end-to-end
+  corrupt-image test; documented that the dev serving route is key-obscured not access-controlled
+  (Slice 8 signed URLs must gate `held` on `approved`). Animated-GIF flatten accepted (documented).
+- **CI changes:** added `pnpm test:workers` to the quality job; the **E2E job now starts
+  local Supabase** (board reads approved media + seeds via service role).
+- **Deferred to deploy (⛔#2/💳 — brief the overseer then):** create the real R2 bucket +
+  Queue, enable **Cloudflare Images** + **Workers AI**, wire the prod `ImageProcessor`, add
+  **presigned R2 PUT**, set consumer secrets (`SUPABASE_URL`, `SUPABASE_SECRET_KEY`), and the
+  app's prod wrangler bindings (`MEDIA_BUCKET`, `MEDIA_QUEUE`).
+- **Out of scope (held):** posts/titles/tags (Slice 3), real AI + human queue (Slice 8),
+  multi-file, video/audio, feeds, ratings.
+- **First action next session:** commit + push branch `slice-2-media-upload`, open a PR, get
+  CI green (force a run via PR close/reopen if needed), then the reviewer-agent gate, then
+  overseer merge. Then start Slice 3.
+- **Repo gotcha:** GitHub does NOT reliably auto-run CI on push to this repo; force a run by
+  closing+reopening the PR. Don't rename a CI job `name:` without updating the
+  branch-protection required-check list.
 
 ---
 
@@ -51,8 +85,8 @@ slice that depends on them:
 | # | Slice | Status | Last test/CI | Notes |
 |---|---|---|---|---|
 | 0 | Foundation & CI spine | ✅ Done | CI green on runner (all 4 jobs) | Merged via PR #1 (`e1e1299`); `main` branch-protected |
-| 1 | Auth & profiles | 🟡 In progress | building on `slice-1-auth` | email verify + public profiles + birthdate column (age enforced later) |
-| 2 | Media upload spine (image → board) | ⬜ Not started | — | The proof-of-spine slice |
+| 1 | Auth & profiles | ✅ Done | CI green; reviewer APPROVE WITH NITS | Merged via PR #2 (`2463c36`) |
+| 2 | Media upload spine (image → board) | 🟡 In progress | all suites green locally; awaiting CI | Code complete; not yet pushed. See session notes + ADR-0012 |
 | 3 | Posts & the board proper | ⬜ Not started | — | |
 | 4 | Tags, metadata & similar posts | ⬜ Not started | — | |
 | 5 | Feeds: New/Hot/Top/Following | ⬜ Not started | — | |
@@ -76,6 +110,22 @@ seam (💳⛔#2) · OAuth/MFA · native mobile. (See [ROADMAP.md](ROADMAP.md).)
 > Significant decisions get an [ADR](docs/adr/); this is the quick chronological
 > index. Product/legal/tech assumptions live in [ASSUMPTIONS.md](ASSUMPTIONS.md).
 
+- **2026-06-21** — Slice 2 (media spine) implemented; all suites green locally,
+  awaiting CI. New **[ADR-0012](docs/adr/0012-slice2-media-spine-buildtest.md)**:
+  realize ADR-0007 with no spend — the pipeline is dependency-injected so the same
+  `runMediaPipeline` runs in the prod consumer Worker (R2 + Cloudflare Images), Node
+  dev/CI (fs + sharp), and tests (fakes). **sharp can't run in workerd**, so the prod
+  re-encoder (Cloudflare Images, deferred) and the Node dev re-encoder (sharp) sit
+  behind an `ImageProcessor` seam. Upload goes through `POST /api/upload` for now;
+  **presigned R2 PUT deferred to deploy** (untestable without a real bucket; avoids
+  shipping unvalidated SigV4). All media writes are service-role; clients have no
+  write privilege on `media`. Lesson reconfirmed: `supabase db diff` drops the
+  `REVOKE ALL` on new tables — hand-add it (column-privacy + no-client-write depend on it).
+- **2026-06-21** — Slice 1 MERGED (PR #2, `2463c36`). Reviewer APPROVE WITH NITS;
+  applied L1 (root layout exposes only `signedIn`, not the session/tokens). Lessons:
+  GitHub auto-trigger on push is unreliable in this repo (force CI via PR
+  close/reopen); renaming a CI job `name:` breaks its branch-protection
+  required-check binding — update the protection contexts when renaming.
 - **2026-06-21** — Slice 1 (#2 auth gate) APPROVED. Choices: email confirmation
   required; public browsing + sign-in to participate; `birthdate` column added now,
   under-16 enforcement deferred to Slice 13. Email/password only at launch

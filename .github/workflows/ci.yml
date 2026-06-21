@@ -27,6 +27,8 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+      # Consumer Worker tests run inside workerd (miniflare) with real R2 bindings.
+      - run: pnpm test:workers
       - run: pnpm build
 
   database:
@@ -74,13 +76,27 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
-      # Anonymous-only E2E needs no database, just non-empty public env so the
-      # per-request Supabase client can be constructed.
-      - run: pnpm test:e2e
-        env:
-          PUBLIC_SUPABASE_URL: http://localhost:54321
-          # Value is irrelevant — anonymous E2E makes no Supabase calls.
-          PUBLIC_SUPABASE_PUBLISHABLE_KEY: unused # gitleaks:allow
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.107.0 # pinned (matches the supabase devDep + database job)
+      - name: Start local Supabase
+        run: supabase start
+      - name: Rebuild DB from migrations (must be clean)
+        run: supabase db reset
+      # The board E2E reads approved media from local Supabase and seeds via the
+      # service role; the dev server + the seed share these env values.
+      - name: Export local Supabase keys
+        run: |
+          eval "$(supabase status -o env)"
+          {
+            echo "PUBLIC_SUPABASE_URL=$API_URL"
+            echo "PUBLIC_SUPABASE_PUBLISHABLE_KEY=$PUBLISHABLE_KEY"
+            echo "SUPABASE_SECRET_KEY=$SECRET_KEY"
+          } >> "$GITHUB_ENV"
+      - name: E2E (Playwright vs vite dev + local Supabase)
+        run: pnpm test:e2e
+      - if: always()
+        run: supabase stop
 
   security:
     name: Security — SAST · SCA · secret scan

@@ -34,6 +34,57 @@ export type Database = {
   }
   public: {
     Tables: {
+      media: {
+        Row: {
+          byte_size: number
+          checksum: string | null
+          created_at: string
+          duration_ms: number | null
+          height: number | null
+          id: string
+          kind: Database["public"]["Enums"]["media_kind"]
+          mime_type: string
+          moderation_state: Database["public"]["Enums"]["moderation_state"]
+          owner_id: string
+          processing_state: Database["public"]["Enums"]["processing_state"]
+          storage_key: string
+          variants: Json
+          width: number | null
+        }
+        Insert: {
+          byte_size: number
+          checksum?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          height?: number | null
+          id?: string
+          kind: Database["public"]["Enums"]["media_kind"]
+          mime_type: string
+          moderation_state?: Database["public"]["Enums"]["moderation_state"]
+          owner_id: string
+          processing_state?: Database["public"]["Enums"]["processing_state"]
+          storage_key: string
+          variants?: Json
+          width?: number | null
+        }
+        Update: {
+          byte_size?: number
+          checksum?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          height?: number | null
+          id?: string
+          kind?: Database["public"]["Enums"]["media_kind"]
+          mime_type?: string
+          moderation_state?: Database["public"]["Enums"]["moderation_state"]
+          owner_id?: string
+          processing_state?: Database["public"]["Enums"]["processing_state"]
+          storage_key?: string
+          variants?: Json
+          width?: number | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           bio: string | null
@@ -69,7 +120,9 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      media_kind: "image" | "audio" | "video"
+      moderation_state: "pending" | "approved" | "held" | "removed"
+      processing_state: "pending" | "processing" | "ready" | "failed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -199,7 +252,11 @@ export const Constants = {
     Enums: {},
   },
   public: {
-    Enums: {},
+    Enums: {
+      media_kind: ["image", "audio", "video"],
+      moderation_state: ["pending", "approved", "held", "removed"],
+      processing_state: ["pending", "processing", "ready", "failed"],
+    },
   },
 } as const
 
