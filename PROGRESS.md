@@ -14,20 +14,38 @@ runner) · ⛔ Blocked.
 
 ## Current session
 
-- **Phase:** Slice 1 — Auth & profiles (implementation, branch `slice-1-auth`).
+- **Phase:** Slice 2 — Media upload spine (NOT STARTED; branch
+  `slice-2-media-upload` created with this plan). **Recommended: begin in a fresh
+  session** (this planning+Slice0+Slice1 session is long).
 - **Last update:** 2026-06-21.
-- **Slice 0:** ✅ DONE — merged via [PR #1](https://github.com/SudoClover/1Clover/pull/1)
-  (`e1e1299`), all 4 CI jobs green on the runner. `main` is branch-protected
-  (requires the 4 checks + a PR; no force-push/delete; admin override retained).
-- **Slice 1 #2 gate:** APPROVED by overseer. Decisions: require email
-  confirmation; public browsing + sign-in to participate; add `birthdate` column
-  now but defer the under-16 enforcement to Slice 13.
-- **Concrete next step:** Build Slice 1 on `slice-1-auth`: `profiles` table +
-  signup trigger + RLS (+ pgTAP), per-request Supabase client, `getClaims` route
-  guard in `hooks.server.ts`, signup/login/logout/reset routes, a members-only
-  page, integration + E2E tests. Then open a PR (reviewer-agent gate + CI) for the
-  overseer to merge. Slice 1 needs **no secrets** — verified against local Supabase
-  in CI.
+- **Slice 0:** ✅ DONE — PR #1 (`e1e1299`). **Slice 1:** ✅ DONE — PR #2
+  (`2463c36`); reviewer APPROVE WITH NITS (L1 applied), all 4 CI jobs green.
+  `main` is branch-protected (4 required checks + PR-only; no force-push/delete;
+  admin override retained).
+- **Slice 2 plan (the proof-of-spine — "upload one image → it appears on the board"):**
+  authed user uploads ONE image → presigned R2 PUT (server-generated key) → enqueue
+  a Cloudflare Queue → consumer Worker validates (magic bytes, size/pixel caps,
+  **SVG banned**, reject polyglots) → re-encode + thumbnail → classify **STUB**
+  (auto-approve in dev) → flip `media.moderation_state` pending→approved → the board
+  shows approved media.
+  - **Local/CI approach (no spend):** miniflare for R2 + Queues bindings;
+    `@cloudflare/vitest-pool-workers` for the consumer with real bindings; `sharp`
+    (already build-allowed) for local re-encode/thumbnail; classifier = stub.
+  - **Deferred to deploy (⛔#2/💳 — NOT needed for Slice 2 CI):** create the real R2
+    bucket + Queue, enable Cloudflare Images + Workers AI. Brief the overseer then.
+  - **Files:** `supabase/schemas` (media table + RLS) + migration + pgTAP;
+    `src/lib/domain/upload-policy/` (pure: allowlist, caps, magic-byte sniff);
+    `src/lib/server/media/` (presign, key-gen, enqueue); `src/routes/api/upload`;
+    `workers/media-consumer/`; `wrangler` R2+Queue bindings; board + `MediaCard`;
+    integration + worker tests; CI: add the worker-pool tests to the matrix.
+  - **Out of scope (binding):** posts/titles/tags (Slice 3), real AI + human queue
+    (Slice 8), multi-file, video/audio, feeds, ratings.
+- **First action next session:** read this + CLAUDE.md; confirm on branch
+  `slice-2-media-upload`; design the `media` table + RLS and the pure `upload-policy`
+  domain module first (test-first), then the consumer Worker.
+- **Repo gotcha:** GitHub does NOT reliably auto-run CI on push to this repo; force a
+  run by closing+reopening the PR (or add a `workflow_dispatch` trigger). Don't
+  rename a CI job `name:` without updating the branch-protection required-check list.
 
 ---
 
@@ -51,8 +69,8 @@ slice that depends on them:
 | # | Slice | Status | Last test/CI | Notes |
 |---|---|---|---|---|
 | 0 | Foundation & CI spine | ✅ Done | CI green on runner (all 4 jobs) | Merged via PR #1 (`e1e1299`); `main` branch-protected |
-| 1 | Auth & profiles | 🟡 In progress | building on `slice-1-auth` | email verify + public profiles + birthdate column (age enforced later) |
-| 2 | Media upload spine (image → board) | ⬜ Not started | — | The proof-of-spine slice |
+| 1 | Auth & profiles | ✅ Done | CI green; reviewer APPROVE WITH NITS | Merged via PR #2 (`2463c36`) |
+| 2 | Media upload spine (image → board) | 🟡 In progress | branch + plan only | The proof-of-spine; see plan above |
 | 3 | Posts & the board proper | ⬜ Not started | — | |
 | 4 | Tags, metadata & similar posts | ⬜ Not started | — | |
 | 5 | Feeds: New/Hot/Top/Following | ⬜ Not started | — | |
@@ -76,6 +94,11 @@ seam (💳⛔#2) · OAuth/MFA · native mobile. (See [ROADMAP.md](ROADMAP.md).)
 > Significant decisions get an [ADR](docs/adr/); this is the quick chronological
 > index. Product/legal/tech assumptions live in [ASSUMPTIONS.md](ASSUMPTIONS.md).
 
+- **2026-06-21** — Slice 1 MERGED (PR #2, `2463c36`). Reviewer APPROVE WITH NITS;
+  applied L1 (root layout exposes only `signedIn`, not the session/tokens). Lessons:
+  GitHub auto-trigger on push is unreliable in this repo (force CI via PR
+  close/reopen); renaming a CI job `name:` breaks its branch-protection
+  required-check binding — update the protection contexts when renaming.
 - **2026-06-21** — Slice 1 (#2 auth gate) APPROVED. Choices: email confirmation
   required; public browsing + sign-in to participate; `birthdate` column added now,
   under-16 enforcement deferred to Slice 13. Email/password only at launch
