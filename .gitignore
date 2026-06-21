@@ -1,0 +1,28 @@
+# OS junk
+.DS_Store
+
+# Secrets — NEVER commit (see CLAUDE.md §4: no secret value in the repo, ever)
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+*.pem
+
+# Local tooling / editor state
+.claude/settings.local.json
+.vscode/
+.idea/
+
+# Node / build output (future slices)
+node_modules/
+.svelte-kit/
+build/
+dist/
+.wrangler/
+coverage/
+*.log
+
+# Supabase local state
+supabase/.branches/
+supabase/.temp/
