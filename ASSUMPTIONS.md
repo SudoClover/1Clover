@@ -50,7 +50,8 @@
 | 🔧 | **Supabase region**: Frankfurt (`eu-central-1`); **R2** originals in EU jurisdiction where configurable | EU residency posture |
 | 🔧 | **Queue consumer** is a **separate Cloudflare Worker** (not inline in the SvelteKit request worker) | Heavy/async media work off the request path |
 | 🔧 | **Canonical safe formats**: images → re-encoded (e.g. WebP/AVIF variants + a safe original copy), EXIF stripped; **SVG uploads banned** | Security: neutralize payloads, strip PII, avoid SVG XSS/SSRF |
-| 🔧 | **Default upload limits (initial, tunable)**: image ≤ 20 MB, ≤ 50 MP (decompression-bomb guard); per-user/action rate limits via Workers Rate Limiting API | Conservative starting caps; revisit against real usage |
+| 🔧 | **Default upload limits (initial, tunable)**: image ≤ 10 MiB, ≤ 40 MP, ≤ 12 000 px/side (decompression-bomb guard), enforced in `src/lib/domain/upload-policy`; per-user/action rate limits via Workers Rate Limiting API (Slice 6) | Conservative starting caps; revisit against real usage |
+| 🔧 | **Media spine build (Slice 2)**: the prod re-encode uses **Cloudflare Images** in the consumer Worker, with **sharp** standing in for Node dev/CI behind an `ImageProcessor` seam (sharp can't run in workerd); upload goes through `POST /api/upload` for now (presigned R2 PUT deferred to deploy). The prod re-encoder (Cloudflare Images vs an in-worker WASM codec) stays an **open choice** behind the seam | See [ADR-0012](docs/adr/0012-slice2-media-spine-buildtest.md) |
 | 🔧 | **Username**: unique, case-insensitive, `[a-z0-9_]`, 3–30 chars; changeable (with later cooldown if abused) | Simple, collision-safe |
 | 🔧 | **IDs**: UUID (v4) primary keys generated DB-side; user-owned tables FK to `auth.users(id) ON DELETE CASCADE` | Erasure-by-cascade + no enumeration |
 | 🔧 | **Time**: all timestamps `timestamptz`, stored UTC | Avoid TZ bugs |

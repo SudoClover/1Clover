@@ -14,38 +14,54 @@ runner) · ⛔ Blocked.
 
 ## Current session
 
-- **Phase:** Slice 2 — Media upload spine (NOT STARTED; branch
-  `slice-2-media-upload` created with this plan). **Recommended: begin in a fresh
-  session** (this planning+Slice0+Slice1 session is long).
+- **Phase:** Slice 2 — Media upload spine. **Implementation COMPLETE; all test
+  suites green locally; not yet committed/pushed — awaiting CI on a PR.** (CI is the
+  authority on done — CLAUDE.md §6.)
 - **Last update:** 2026-06-21.
-- **Slice 0:** ✅ DONE — PR #1 (`e1e1299`). **Slice 1:** ✅ DONE — PR #2
-  (`2463c36`); reviewer APPROVE WITH NITS (L1 applied), all 4 CI jobs green.
+- **Slice 0:** ✅ DONE — PR #1 (`e1e1299`). **Slice 1:** ✅ DONE — PR #2 (`2463c36`).
   `main` is branch-protected (4 required checks + PR-only; no force-push/delete;
   admin override retained).
-- **Slice 2 plan (the proof-of-spine — "upload one image → it appears on the board"):**
-  authed user uploads ONE image → presigned R2 PUT (server-generated key) → enqueue
-  a Cloudflare Queue → consumer Worker validates (magic bytes, size/pixel caps,
-  **SVG banned**, reject polyglots) → re-encode + thumbnail → classify **STUB**
-  (auto-approve in dev) → flip `media.moderation_state` pending→approved → the board
-  shows approved media.
-  - **Local/CI approach (no spend):** miniflare for R2 + Queues bindings;
-    `@cloudflare/vitest-pool-workers` for the consumer with real bindings; `sharp`
-    (already build-allowed) for local re-encode/thumbnail; classifier = stub.
-  - **Deferred to deploy (⛔#2/💳 — NOT needed for Slice 2 CI):** create the real R2
-    bucket + Queue, enable Cloudflare Images + Workers AI. Brief the overseer then.
-  - **Files:** `supabase/schemas` (media table + RLS) + migration + pgTAP;
-    `src/lib/domain/upload-policy/` (pure: allowlist, caps, magic-byte sniff);
-    `src/lib/server/media/` (presign, key-gen, enqueue); `src/routes/api/upload`;
-    `workers/media-consumer/`; `wrangler` R2+Queue bindings; board + `MediaCard`;
-    integration + worker tests; CI: add the worker-pool tests to the matrix.
-  - **Out of scope (binding):** posts/titles/tags (Slice 3), real AI + human queue
-    (Slice 8), multi-file, video/audio, feeds, ratings.
-- **First action next session:** read this + CLAUDE.md; confirm on branch
-  `slice-2-media-upload`; design the `media` table + RLS and the pure `upload-policy`
-  domain module first (test-first), then the consumer Worker.
-- **Repo gotcha:** GitHub does NOT reliably auto-run CI on push to this repo; force a
-  run by closing+reopening the PR (or add a `workflow_dispatch` trigger). Don't
-  rename a CI job `name:` without updating the branch-protection required-check list.
+- **Slice 2 — what was built** (the proof-of-spine: authed upload → board):
+  - `media` table + 3 shared enums (`media_kind`/`moderation_state`/`processing_state`)
+    + RLS (public read of approved/ready only; owner reads own; **no client writes**;
+    storage_key/checksum/byte_size hidden) — schema + reviewed migration + pgTAP (19).
+    **Hand-added the `REVOKE ALL` the diff tool drops** (same trap as profiles).
+  - Pure `src/lib/domain/upload-policy/` — magic-byte sniff, **SVG ban**, allowlist,
+    declared/actual mismatch (polyglot/spoof guard), size + pixel/dimension caps. Unit-tested.
+  - `src/lib/server/media/` — dependency-injected `runMediaPipeline` (validate →
+    re-encode → thumbnail → classify → flip state), seams: `MediaStore` (R2 / fs-dev),
+    `ImageProcessor` (sharp Node / Images prod-deferred), `Classifier` (stub), service-role
+    `repo`/sink + `dispatch` (enqueue prod / pending dev).
+  - `POST /api/upload` (auth-gated, server-side row insert + dispatch), `GET /media/[...key]`
+    (dev serving of safe/thumb only, `nosniff`), board `/` + `MediaCard`, `/upload` UI (guarded).
+  - `workers/media-consumer/` (queue handler) + `wrangler.toml`; pool-workers test of the
+    consumer with **real R2 bindings**.
+  - Decisions in **[ADR-0012](docs/adr/0012-slice2-media-spine-buildtest.md)** (no-spend
+    realization of ADR-0007: endpoint-upload now / presign at deploy; sharp-Node-dev vs
+    Images-prod behind the seam; classifier stub).
+- **Local test results (all green):** unit 31 · pgTAP 32 · integration 10 (valid→approved;
+  SVG/mismatch/**corrupt**→failed; RLS) · workers 2 (real R2) · E2E 5 (incl. board renders an
+  approved card, served `image/webp` + `nosniff`). `pnpm build` clean (sharp/node:fs kept out of
+  the workerd bundle). `pnpm audit --audit-level=high` clean. typecheck + lint clean.
+- **Reviewer-agent gate (fresh context, read-only):** **APPROVE WITH NITS** — no Critical/Major.
+  Applied: markFailed no longer writes the reason into client-readable `variants` (logs it);
+  dropped the redundant `media/` key prefix (no more `/media/media/…`); added the end-to-end
+  corrupt-image test; documented that the dev serving route is key-obscured not access-controlled
+  (Slice 8 signed URLs must gate `held` on `approved`). Animated-GIF flatten accepted (documented).
+- **CI changes:** added `pnpm test:workers` to the quality job; the **E2E job now starts
+  local Supabase** (board reads approved media + seeds via service role).
+- **Deferred to deploy (⛔#2/💳 — brief the overseer then):** create the real R2 bucket +
+  Queue, enable **Cloudflare Images** + **Workers AI**, wire the prod `ImageProcessor`, add
+  **presigned R2 PUT**, set consumer secrets (`SUPABASE_URL`, `SUPABASE_SECRET_KEY`), and the
+  app's prod wrangler bindings (`MEDIA_BUCKET`, `MEDIA_QUEUE`).
+- **Out of scope (held):** posts/titles/tags (Slice 3), real AI + human queue (Slice 8),
+  multi-file, video/audio, feeds, ratings.
+- **First action next session:** commit + push branch `slice-2-media-upload`, open a PR, get
+  CI green (force a run via PR close/reopen if needed), then the reviewer-agent gate, then
+  overseer merge. Then start Slice 3.
+- **Repo gotcha:** GitHub does NOT reliably auto-run CI on push to this repo; force a run by
+  closing+reopening the PR. Don't rename a CI job `name:` without updating the
+  branch-protection required-check list.
 
 ---
 
@@ -70,7 +86,7 @@ slice that depends on them:
 |---|---|---|---|---|
 | 0 | Foundation & CI spine | ✅ Done | CI green on runner (all 4 jobs) | Merged via PR #1 (`e1e1299`); `main` branch-protected |
 | 1 | Auth & profiles | ✅ Done | CI green; reviewer APPROVE WITH NITS | Merged via PR #2 (`2463c36`) |
-| 2 | Media upload spine (image → board) | 🟡 In progress | branch + plan only | The proof-of-spine; see plan above |
+| 2 | Media upload spine (image → board) | 🟡 In progress | all suites green locally; awaiting CI | Code complete; not yet pushed. See session notes + ADR-0012 |
 | 3 | Posts & the board proper | ⬜ Not started | — | |
 | 4 | Tags, metadata & similar posts | ⬜ Not started | — | |
 | 5 | Feeds: New/Hot/Top/Following | ⬜ Not started | — | |
@@ -94,6 +110,17 @@ seam (💳⛔#2) · OAuth/MFA · native mobile. (See [ROADMAP.md](ROADMAP.md).)
 > Significant decisions get an [ADR](docs/adr/); this is the quick chronological
 > index. Product/legal/tech assumptions live in [ASSUMPTIONS.md](ASSUMPTIONS.md).
 
+- **2026-06-21** — Slice 2 (media spine) implemented; all suites green locally,
+  awaiting CI. New **[ADR-0012](docs/adr/0012-slice2-media-spine-buildtest.md)**:
+  realize ADR-0007 with no spend — the pipeline is dependency-injected so the same
+  `runMediaPipeline` runs in the prod consumer Worker (R2 + Cloudflare Images), Node
+  dev/CI (fs + sharp), and tests (fakes). **sharp can't run in workerd**, so the prod
+  re-encoder (Cloudflare Images, deferred) and the Node dev re-encoder (sharp) sit
+  behind an `ImageProcessor` seam. Upload goes through `POST /api/upload` for now;
+  **presigned R2 PUT deferred to deploy** (untestable without a real bucket; avoids
+  shipping unvalidated SigV4). All media writes are service-role; clients have no
+  write privilege on `media`. Lesson reconfirmed: `supabase db diff` drops the
+  `REVOKE ALL` on new tables — hand-add it (column-privacy + no-client-write depend on it).
 - **2026-06-21** — Slice 1 MERGED (PR #2, `2463c36`). Reviewer APPROVE WITH NITS;
   applied L1 (root layout exposes only `signedIn`, not the session/tokens). Lessons:
   GitHub auto-trigger on push is unreliable in this repo (force CI via PR

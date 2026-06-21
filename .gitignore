@@ -26,6 +26,9 @@ test-results/
 playwright-report/
 *.log
 
+# Local dev object store (stands in for R2 — never committed)
+.r2-dev/
+
 # Supabase local state
 supabase/.branches/
 supabase/.temp/

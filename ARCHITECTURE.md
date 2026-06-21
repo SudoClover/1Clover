@@ -265,6 +265,16 @@ served; content is `pending` (invisible) until it passes; classifier output only
 uploaded and re-validated server-side like any other upload (§7). Tools never
 write to storage directly.
 
+> **Slice 2 build status (the spine).** The pipeline skeleton is built and proven
+> end-to-end locally + in CI: `POST /api/upload` (auth-gated) → object store →
+> `media` row (`pending`) → dispatch → the dependency-injected `runMediaPipeline`
+> (`src/lib/server/media/`) → magic-byte validation, re-encode + thumbnail, stub
+> classify → `approved`/`ready`, rendered on the board (`/`) via `/media/[...key]`.
+> The paid/native pieces are **deferred to the deploy gate** behind seams: presigned
+> R2 PUT, **Cloudflare Images** (re-encode; sharp stands in for Node dev/CI),
+> **Workers AI** (classify; stubbed), and the real R2 bucket + Queue. See
+> [ADR-0012](docs/adr/0012-slice2-media-spine-buildtest.md).
+
 ---
 
 ## 6. Feeds, ranking & recommendations

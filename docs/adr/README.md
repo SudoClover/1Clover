@@ -34,6 +34,7 @@ Alternatives: what we rejected and why.
 | [0009](0009-recommendations-tags-then-vectors.md) | Tag/metadata recommendations first, pgvector later |
 | [0010](0010-editor-libraries.md) | Per-tool canvas libraries behind the registry |
 | [0011](0011-migrations-declarative.md) | Declarative schema + reviewed migrations, CI-to-prod only |
+| [0012](0012-slice2-media-spine-buildtest.md) | Realizing the media pipeline (ADR-0007) under the no-spend constraint |
 
 All decisions trace back to the five principles (readable, AI-decodable, simple/
 layered/expandable, secure-by-default, media-as-references) and the overseer
