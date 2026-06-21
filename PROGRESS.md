@@ -17,16 +17,20 @@ runner) · ⛔ Blocked.
 - **Phase:** Slice 0 — Foundation & CI spine (implementation, branch
   `slice-0-foundation`).
 - **Last update:** 2026-06-21.
+- **Reviewer-agent gate:** PASSED — fresh-context, read-only review returned
+  **APPROVE WITH NITS** (no secrets, no scope creep, all local gates re-verified).
+  Substantive findings fixed on the branch (see decisions log).
 - **Last CI status:** No remote yet, so CI has **not** run (CI is the authority on
   "done" — Slice 0 is therefore *not* complete). **Locally verified green:**
   `typecheck`, `test` (1 unit), `lint` (prettier + eslint), `build`
   (adapter-cloudflare), Playwright E2E smoke. **Not locally verified** (wired for
   CI): the `database` job (Docker daemon not running here) and the `security` job
   (gitleaks/semgrep not installed locally; `pnpm audit` ran clean — 1 low).
-- **Concrete next step:** Overseer to (1) create the GitHub repo + push so CI runs
-  the full matrix, and (2) create the Supabase + Cloudflare projects and hold the
-  credentials (⛔#2/💳, incl. Supabase Pro ~$25/mo). Once CI is green on its runner,
-  mark Slice 0 ✅ and start **Slice 1 — Auth & profiles**.
+- **Concrete next step:** Overseer has created the GitHub repo + Cloudflare +
+  Supabase Pro accounts (nothing wired yet). Next: connect the git remote and push
+  `slice-0-foundation` so CI runs the full matrix (need the repo URL); then wire CI
+  secrets + link the Supabase/Cloudflare projects (⛔#2/💳). Once CI is green on its
+  runner, mark Slice 0 ✅ and start **Slice 1 — Auth & profiles**.
 
 ---
 
@@ -74,6 +78,15 @@ seam (💳⛔#2) · OAuth/MFA · native mobile. (See [ROADMAP.md](ROADMAP.md).)
 > Significant decisions get an [ADR](docs/adr/); this is the quick chronological
 > index. Product/legal/tech assumptions live in [ASSUMPTIONS.md](ASSUMPTIONS.md).
 
+- **2026-06-21** — Slice 0 reviewer-agent gate (fresh context, read-only):
+  **APPROVE WITH NITS**. Fixed: M1 (seed `sql_paths` → no-match glob so `db reset`
+  doesn't choke on a missing `seed.sql`), M2 (`schema_paths` wired to
+  `./schemas/*.sql` + created `supabase/schemas/` + `supabase/migrations/`), L2
+  (pinned Supabase CLI to 2.107.0 in CI), N3 (CI comment on the sync lifecycle).
+  Accepted/deferred: L1 (SCA `pnpm audit` may block on unrelated future advisories
+  — a policy call for the overseer), Semgrep version pin (after first green CI run),
+  L3/N1/N2/N4 (minor — Docker image caching, dev-server E2E, deferred wrangler.toml,
+  placeholder format).
 - **2026-06-21** — Slice 0 scaffold built: SvelteKit (Svelte 5) + adapter-cloudflare,
   Vitest, Playwright, ESLint flat config (`no-explicit-any` error), Prettier (tabs;
   long-form `.md` excluded), local Supabase via CLI, and a CI workflow with

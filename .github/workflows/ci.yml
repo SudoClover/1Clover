@@ -21,6 +21,8 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
+      # `pnpm install` runs the `prepare` script (svelte-kit sync), which generates
+      # .svelte-kit/tsconfig.json that lint + typecheck depend on.
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
@@ -34,7 +36,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.107.0 # pinned for reproducible gates (matches the supabase devDep)
       - name: Start local Supabase
         run: supabase start
       - name: Rebuild DB from migrations (must be clean)
@@ -82,6 +84,8 @@ jobs:
         run: pnpm audit --audit-level=high
 
       - name: Static analysis (SAST — Semgrep OSS)
+        # TODO: pin Semgrep to an explicit version after the first known-good CI run
+        # (avoids guessing a version that may not exist and breaking the gate).
         run: |
           pipx install semgrep || pip install semgrep
           semgrep scan --config p/typescript --config p/security-audit --error --quiet
