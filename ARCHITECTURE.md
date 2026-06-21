@@ -170,8 +170,8 @@ profiles ──< posts ──< post_media >── media          posts ──< c
 | Table | Key columns | Notes |
 |---|---|---|
 | `media` | `id PK`, `owner_id→auth.users`, `storage_key`, `kind media_kind`, `mime_type`, `byte_size`, `width`, `height`, `duration_ms`, `checksum`, `variants jsonb` (thumbnail/derived keys), `processing_state`, `moderation_state`, `created_at` | The user's **library**. `storage_key` is server-generated; original re-encoded; only safe copy served. Bytes live in R2, never here. |
-| `posts` | `id PK`, `author_id→auth.users`, `title`, `description`, `metadata jsonb`, `moderation_state`, `rating_count`, `rating_sum`, `comment_count`, `hot_score`, `created_at`, `edited_at` | Counters/`hot_score` are denormalized caches updated by triggers/jobs for feed performance. `metadata` = structured discovery fields. |
-| `post_media` | `post_id`, `media_id`, `position`, PK(post,media) | A post references 1..n library media (carousel); media reusable. |
+| `posts` | `id PK`, `author_id→auth.users`, `title`, `description`, `metadata jsonb`, `moderation_state`, `rating_count`, `rating_sum`, `comment_count`, `hot_score`, `created_at`, `edited_at` | Counters/`hot_score` are denormalized caches updated by triggers/jobs for feed performance. `metadata` = structured discovery fields. **Slice 3 builds** `id/author_id/title/description/moderation_state/created_at/edited_at` only; `metadata`/counters/`hot_score` are additive in Slices 4–6. `moderation_state` defaults `approved` (post text moderated reactively — reports/queue, Slice 8); created atomically with its `post_media` via the `create_post` RPC ([ADR-0013](docs/adr/0013-client-writable-posts-atomic-create.md)). First **client-writable** table. |
+| `post_media` | `post_id`, `media_id`, `position`, PK(post,media) | A post references 1..n library media (carousel); media reusable. Owner-only link/reorder/unlink via RLS; `edited_at` server-stamped by trigger. |
 | `tags` | `id PK`, `name uniq` (normalized), `created_at` | Discovery primitive. |
 | `post_tags` | `post_id`, `tag_id`, PK(post,tag) | Many-to-many; drives tag-overlap "similar posts". |
 | `comments` | `id PK`, `post_id→posts`, `author_id→auth.users`, `parent_comment_id` (self-ref, nullable), `body`, `moderation_state`, `created_at`, `edited_at` | Threaded. |
@@ -295,6 +295,18 @@ write to storage directly.
   in `src/lib/domain/recommend/`; later = `pgvector` embeddings behind the same
   `findSimilar(postId)` interface — no caller changes.
 - **Blocks/holds** are filtered out in every feed query via RLS + explicit filters.
+
+> **Slice 3 build status (posts & the board).** The board (`/`) and post detail
+> (`/post/[id]`) are built: the **New** view above is realized as approved posts
+> newest-first with **keyset** infinite scroll (cursor on `(created_at, id)` over the
+> partial `approved` index; next pages via `/api/board`). Each card's cover is the
+> lowest-`position` approved+ready media's thumbnail. Data access is
+> `src/lib/server/db/posts.ts` (the **authed per-request client** + RLS, not
+> service-role); create goes through the atomic **`create_post`** RPC
+> ([ADR-0013](docs/adr/0013-client-writable-posts-atomic-create.md)); owner edit/delete
+> are single-statement writes gated by RLS. New components: `PostCard`, `Masonry`,
+> `PostDetail`. Hot/Top/Following + the `hot_score` column and ranking math remain
+> Slice 5.
 
 ---
 

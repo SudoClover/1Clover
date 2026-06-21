@@ -85,6 +85,69 @@ export type Database = {
         }
         Relationships: []
       }
+      post_media: {
+        Row: {
+          media_id: string
+          position: number
+          post_id: string
+        }
+        Insert: {
+          media_id: string
+          position?: number
+          post_id: string
+        }
+        Update: {
+          media_id?: string
+          position?: number
+          post_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_media_media_id_fkey"
+            columns: ["media_id"]
+            isOneToOne: false
+            referencedRelation: "media"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_media_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      posts: {
+        Row: {
+          author_id: string
+          created_at: string
+          description: string | null
+          edited_at: string | null
+          id: string
+          moderation_state: Database["public"]["Enums"]["moderation_state"]
+          title: string
+        }
+        Insert: {
+          author_id: string
+          created_at?: string
+          description?: string | null
+          edited_at?: string | null
+          id?: string
+          moderation_state?: Database["public"]["Enums"]["moderation_state"]
+          title: string
+        }
+        Update: {
+          author_id?: string
+          created_at?: string
+          description?: string | null
+          edited_at?: string | null
+          id?: string
+          moderation_state?: Database["public"]["Enums"]["moderation_state"]
+          title?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           bio: string | null
@@ -117,7 +180,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      create_post: {
+        Args: { p_description: string; p_media_ids: string[]; p_title: string }
+        Returns: string
+      }
     }
     Enums: {
       media_kind: "image" | "audio" | "video"

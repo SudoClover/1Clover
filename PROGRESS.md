@@ -14,54 +14,58 @@ runner) · ⛔ Blocked.
 
 ## Current session
 
-- **Phase:** Slice 2 — Media upload spine. **Implementation COMPLETE; all test
-  suites green locally; not yet committed/pushed — awaiting CI on a PR.** (CI is the
-  authority on done — CLAUDE.md §6.)
-- **Last update:** 2026-06-21.
-- **Slice 0:** ✅ DONE — PR #1 (`e1e1299`). **Slice 1:** ✅ DONE — PR #2 (`2463c36`).
-  `main` is branch-protected (4 required checks + PR-only; no force-push/delete;
-  admin override retained).
-- **Slice 2 — what was built** (the proof-of-spine: authed upload → board):
-  - `media` table + 3 shared enums (`media_kind`/`moderation_state`/`processing_state`)
-    + RLS (public read of approved/ready only; owner reads own; **no client writes**;
-    storage_key/checksum/byte_size hidden) — schema + reviewed migration + pgTAP (19).
-    **Hand-added the `REVOKE ALL` the diff tool drops** (same trap as profiles).
-  - Pure `src/lib/domain/upload-policy/` — magic-byte sniff, **SVG ban**, allowlist,
-    declared/actual mismatch (polyglot/spoof guard), size + pixel/dimension caps. Unit-tested.
-  - `src/lib/server/media/` — dependency-injected `runMediaPipeline` (validate →
-    re-encode → thumbnail → classify → flip state), seams: `MediaStore` (R2 / fs-dev),
-    `ImageProcessor` (sharp Node / Images prod-deferred), `Classifier` (stub), service-role
-    `repo`/sink + `dispatch` (enqueue prod / pending dev).
-  - `POST /api/upload` (auth-gated, server-side row insert + dispatch), `GET /media/[...key]`
-    (dev serving of safe/thumb only, `nosniff`), board `/` + `MediaCard`, `/upload` UI (guarded).
-  - `workers/media-consumer/` (queue handler) + `wrangler.toml`; pool-workers test of the
-    consumer with **real R2 bindings**.
-  - Decisions in **[ADR-0012](docs/adr/0012-slice2-media-spine-buildtest.md)** (no-spend
-    realization of ADR-0007: endpoint-upload now / presign at deploy; sharp-Node-dev vs
-    Images-prod behind the seam; classifier stub).
-- **Local test results (all green):** unit 31 · pgTAP 32 · integration 10 (valid→approved;
-  SVG/mismatch/**corrupt**→failed; RLS) · workers 2 (real R2) · E2E 5 (incl. board renders an
-  approved card, served `image/webp` + `nosniff`). `pnpm build` clean (sharp/node:fs kept out of
-  the workerd bundle). `pnpm audit --audit-level=high` clean. typecheck + lint clean.
-- **Reviewer-agent gate (fresh context, read-only):** **APPROVE WITH NITS** — no Critical/Major.
-  Applied: markFailed no longer writes the reason into client-readable `variants` (logs it);
-  dropped the redundant `media/` key prefix (no more `/media/media/…`); added the end-to-end
-  corrupt-image test; documented that the dev serving route is key-obscured not access-controlled
-  (Slice 8 signed URLs must gate `held` on `approved`). Animated-GIF flatten accepted (documented).
-- **CI changes:** added `pnpm test:workers` to the quality job; the **E2E job now starts
-  local Supabase** (board reads approved media + seeds via service role).
-- **Deferred to deploy (⛔#2/💳 — brief the overseer then):** create the real R2 bucket +
-  Queue, enable **Cloudflare Images** + **Workers AI**, wire the prod `ImageProcessor`, add
-  **presigned R2 PUT**, set consumer secrets (`SUPABASE_URL`, `SUPABASE_SECRET_KEY`), and the
-  app's prod wrangler bindings (`MEDIA_BUCKET`, `MEDIA_QUEUE`).
-- **Out of scope (held):** posts/titles/tags (Slice 3), real AI + human queue (Slice 8),
-  multi-file, video/audio, feeds, ratings.
-- **First action next session:** commit + push branch `slice-2-media-upload`, open a PR, get
-  CI green (force a run via PR close/reopen if needed), then the reviewer-agent gate, then
-  overseer merge. Then start Slice 3.
-- **Repo gotcha:** GitHub does NOT reliably auto-run CI on push to this repo; force a run by
-  closing+reopening the PR. Don't rename a CI job `name:` without updating the
-  branch-protection required-check list.
+- **Phase:** Slice 3 — Posts & the board proper. **IMPLEMENTATION COMPLETE locally**
+  on branch `slice-3-posts-board` (off `main`); awaiting CI on its own runner + the
+  reviewer gate before merge.
+- **Last update:** 2026-06-22.
+- **Slices 0–2:** ✅ DONE & merged — PR #1 (`e1e1299`), PR #2 (`2463c36`), **PR #3
+  (`aafd78a` / merge `11d0255`)**. Slice 2 reviewer gate APPROVE WITH NITS (applied);
+  all 4 CI jobs green. `main` is branch-protected (4 required checks + PR-only).
+  Deferred Slice-2 deploy items (⛔#2/💳): real R2 bucket + Queue, Cloudflare Images,
+  Workers AI, presigned R2 PUT, consumer secrets, app prod wrangler bindings — brief
+  the overseer at the deploy gate. (Built media: `media` table, `upload-policy` domain,
+  `runMediaPipeline` + seams, `/api/upload`, `/media/[...key]`, consumer worker; see
+  [ADR-0012](docs/adr/0012-slice2-media-spine-buildtest.md).)
+- **Slice 3 — built end-to-end; ALL local suites green; not committed yet:**
+  - **DB:** `supabase/schemas/03_posts.sql` — `posts` (id, author_id, title≤140,
+    description≤2000, moderation_state default **approved**, created_at, edited_at) +
+    `post_media` (post_id, media_id, position, PK) + RLS + `edited_at` trigger + the
+    **`create_post(p_title, p_description, p_media_ids[])` RPC** (SECURITY INVOKER →
+    atomic post+links under RLS; author_id from `auth.uid()`; execute granted to
+    `authenticated` only). Migration `20260621221225_create_posts.sql` hand-reviewed:
+    **both table `REVOKE ALL` + the function `REVOKE EXECUTE FROM public,anon` hand-added**
+    (diff drops them — security-critical). pgTAP `03_posts_rls.test.sql` now **29 tests**
+    (added has_function + execute-privilege). Types regenerated (includes `create_post`).
+  - **Domain (pure):** `src/lib/domain/posts/post-input.ts` (+`types.ts`) — title/description
+    caps, ≥1-media + cap(20) + uuid checks, trim/dedupe. Unit-tested.
+  - **Server:** `src/lib/server/db/posts.ts` — `getBoardPage` (keyset cursor on
+    `(created_at,id)`, cover = lowest-`position` approved+ready thumb), `getPostById`,
+    `createPost` (RPC), `updatePost`/`deletePost` (RLS), `listPostableMedia`. Uses the
+    **authed per-request client**, not service-role.
+  - **UI:** board `/` rewritten to **posts** (Masonry + PostCard + IntersectionObserver
+    infinite scroll via `/api/board`); `post/[id]` detail (PostDetail) + owner edit/delete;
+    `/create` (pick from own approved library → `create_post`); `/create` added to the
+    authGuard. Title/description rendered as text (`{…}`, never `{@html}`) → escaped.
+  - **Tests green locally:** unit **42**, integration **16** (incl. 6 new two-user posts:
+    create→board→detail, approved-only public + owner-sees-own-held, owner edit/delete +
+    non-owner denied via RLS, atomic rollback when linking unowned media, keyset paging),
+    pgTAP **61**, E2E **7** (board render + served-cover nosniff/webp, board→detail, /create
+    guard), lint clean, typecheck 0/0. New **[ADR-0013](docs/adr/0013-client-writable-posts-atomic-create.md)**.
+  - **NEXT (precise):** commit (conventional `feat:`) → push → **force CI** via PR
+    open/close-reopen (auto-trigger unreliable in this repo) → reviewer-agent gate (fresh
+    context, read-only) → address findings → merge. **Drift audit is due** (Slices 1–3, per
+    CLAUDE.md §11) — run it around this merge.
+  - **E2E note (decision):** UI form-login is **flaky in E2E** (SvelteKit enhance vs
+    hydration race: native submit can land back on `/login`); the repo already keeps UI auth
+    out of E2E (`e2e/auth.test.ts`). So posts E2E seeds via service-role and tests the
+    anonymous board→detail render journey + the `/create` guard; the authed create/edit/delete
+    paths are proven by the posts **integration** suite against real RLS.
+- **Out of scope (binding):** tags/metadata (Slice 4), feeds/ranking (Slice 5), ratings
+  (Slice 6), comments (Slice 7), similar posts. No counters/`hot_score` columns yet
+  (additive in their slices).
+- **Repo gotcha:** GitHub does NOT reliably auto-run CI on push; force a run via PR
+  close/reopen. Don't rename a CI job `name:` without updating the branch-protection
+  required-check list. `supabase db diff` drops `REVOKE`/grants — hand-add them.
 
 ---
 
@@ -86,8 +90,8 @@ slice that depends on them:
 |---|---|---|---|---|
 | 0 | Foundation & CI spine | ✅ Done | CI green on runner (all 4 jobs) | Merged via PR #1 (`e1e1299`); `main` branch-protected |
 | 1 | Auth & profiles | ✅ Done | CI green; reviewer APPROVE WITH NITS | Merged via PR #2 (`2463c36`) |
-| 2 | Media upload spine (image → board) | 🟡 In progress | all suites green locally; awaiting CI | Code complete; not yet pushed. See session notes + ADR-0012 |
-| 3 | Posts & the board proper | ⬜ Not started | — | |
+| 2 | Media upload spine (image → board) | ✅ Done | CI green (PR #3); reviewer APPROVE WITH NITS | Merged `11d0255`. Deploy items deferred (#2/💳); see ADR-0012 |
+| 3 | Posts & the board proper | 🟡 In progress | all local suites green (42 unit/16 int/61 pgTAP/7 E2E); awaiting CI + reviewer | `slice-3-posts-board`; built end-to-end; see session notes + ADR-0013 |
 | 4 | Tags, metadata & similar posts | ⬜ Not started | — | |
 | 5 | Feeds: New/Hot/Top/Following | ⬜ Not started | — | |
 | 6 | Ratings & vote integrity + rate limit | ⬜ Not started | — | |
@@ -110,6 +114,25 @@ seam (💳⛔#2) · OAuth/MFA · native mobile. (See [ROADMAP.md](ROADMAP.md).)
 > Significant decisions get an [ADR](docs/adr/); this is the quick chronological
 > index. Product/legal/tech assumptions live in [ASSUMPTIONS.md](ASSUMPTIONS.md).
 
+- **2026-06-22** — Slice 3 built end-to-end (posts/post_media + board + detail + create +
+  owner edit/delete); all local suites green. **Decision ([ADR-0013](docs/adr/0013-client-writable-posts-atomic-create.md)):**
+  posts are the first client-writable tables, so writes use the **authed per-request
+  client + RLS** (not service-role). Create goes through a **`SECURITY INVOKER`
+  `create_post` RPC** so the post + its `post_media` links commit **atomically** under
+  RLS (linking unowned media rolls the whole post back — proven in integration); a
+  reusable template for ratings/comments. Board is the **New** feed: approved-only, keyset
+  `(created_at,id)` cursor, cover = lowest-`position` approved thumb. XSS handled by
+  rendering title/description as text (never `{@html}`). **Lessons:** (a) `db diff` also
+  drops the default `PUBLIC` execute grant on functions — hand-maintain
+  `REVOKE EXECUTE … FROM public,anon` + grant to `authenticated`; (b) UI form-login is a
+  hydration-race flake in Playwright — keep authed flows in integration tests (repo
+  convention), seed E2E via service-role.
+- **2026-06-21** — Slice 2 MERGED (PR #3, merge `11d0255`); all 4 CI jobs green.
+  Slice 3 started on `slice-3-posts-board`. **Decision:** `posts.moderation_state`
+  defaults to `approved` — post text is moderated reactively (reports/queue, Slice 8);
+  the gated proactive payload is media (Slice 2). Posts/post_media are the first
+  **client-writable** tables (owner insert/update/delete via RLS; `moderation_state`
+  not in the client column grants so users can't self-un-hold).
 - **2026-06-21** — Slice 2 (media spine) implemented; all suites green locally,
   awaiting CI. New **[ADR-0012](docs/adr/0012-slice2-media-spine-buildtest.md)**:
   realize ADR-0007 with no spend — the pipeline is dependency-injected so the same
