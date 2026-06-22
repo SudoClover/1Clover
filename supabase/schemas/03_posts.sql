@@ -14,7 +14,10 @@ create table public.posts (
 	description text check (description is null or char_length(description) <= 2000),
 	moderation_state public.moderation_state not null default 'approved',
 	created_at timestamptz not null default now(),
-	edited_at timestamptz
+	edited_at timestamptz,
+	-- Server-computed "hot" rank (Slice 5). Set by a trigger, never by clients (no column
+	-- grant), so the feed can't be skewed. See set_post_hot_score below.
+	hot_score double precision not null default 0
 );
 
 comment on table public.posts is 'A published post: title/description wrapping 1..n media. Owner-writable; moderation_state is server-only.';
@@ -22,6 +25,8 @@ comment on table public.posts is 'A published post: title/description wrapping 1
 -- Keyset board pagination: newest-first, (created_at, id) as the cursor.
 create index posts_board_idx on public.posts (created_at desc, id desc) where moderation_state = 'approved';
 create index posts_author_idx on public.posts (author_id, created_at desc);
+-- Keyset Hot feed: highest hot_score first, (hot_score, id) as the cursor.
+create index posts_hot_idx on public.posts (hot_score desc, id desc) where moderation_state = 'approved';
 
 alter table public.posts enable row level security;
 
@@ -54,10 +59,64 @@ $$;
 create trigger posts_set_edited before update on public.posts
 	for each row execute function public.stamp_post_edited();
 
+-- `hot_score` is server-computed (clients have no grant on it). Reddit-style rank: a
+-- popularity term (log10 of the score) + an absolute-time term. Scores arrive with
+-- ratings (Slice 6); until then the score is 0, so this is the time term alone and Hot
+-- mirrors New. Mirrors the pure spec in src/lib/domain/feed/hot-score.ts (45000 divisor),
+-- with an integration test asserting they agree. Set on insert; Slice 6 recomputes on
+-- rating change.
+create or replace function public.set_post_hot_score()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+	new.hot_score := extract(epoch from coalesce(new.created_at, now())) / 45000;
+	return new;
+end;
+$$;
+
+create trigger posts_set_hot_score before insert on public.posts
+	for each row execute function public.set_post_hot_score();
+
+-- hot_feed_page: one ordered keyset page of approved post ids for the Hot feed. The
+-- cursor is the LAST id of the previous page; the boundary's (hot_score, id) is resolved
+-- HERE, in SQL, so hot_score never round-trips through the client (PostgREST truncates
+-- float8, which would dup/skip rows at page edges). SECURITY INVOKER → RLS still applies;
+-- Hot is public, so anon/authenticated may execute.
+-- Trade-off: if the cursor post is deleted/held mid-scroll, the boundary CTE is empty and
+-- the next page returns empty (pagination ends early until refresh) — no dup/skip, accepted.
+create or replace function public.hot_feed_page(p_limit integer, p_cursor_id uuid default null)
+returns setof uuid
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+	with boundary as (
+		select hot_score, id from public.posts where id = p_cursor_id
+	)
+	select p.id
+	from public.posts p
+	where p.moderation_state = 'approved'
+		and (
+			p_cursor_id is null
+			or p.hot_score < (select hot_score from boundary)
+			or (p.hot_score = (select hot_score from boundary) and p.id < (select id from boundary))
+		)
+	order by p.hot_score desc, p.id desc
+	limit p_limit;
+$$;
+
+-- Default EXECUTE is granted to PUBLIC on create — revoke it, then allow everyone who can
+-- read the public board (anon + signed-in users).
+revoke execute on function public.hot_feed_page(integer, uuid) from public;
+grant execute on function public.hot_feed_page(integer, uuid) to anon, authenticated;
+
 -- Column privileges: clients read public columns and may write only title/description
 -- (+ author_id on insert, pinned to self by the policy). Never moderation_state/edited_at.
 revoke all on public.posts from anon, authenticated;
-grant select (id, author_id, title, description, moderation_state, created_at, edited_at)
+grant select (id, author_id, title, description, moderation_state, created_at, edited_at, hot_score)
 	on public.posts to anon, authenticated;
 grant insert (author_id, title, description) on public.posts to authenticated;
 grant update (title, description) on public.posts to authenticated;

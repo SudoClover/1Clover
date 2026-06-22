@@ -14,12 +14,19 @@ runner) · ⛔ Blocked.
 
 ## Current session
 
-- **Phase:** Slice 4 — Tags, metadata & "similar posts" **✅ DONE & merged** (PR #6, merge
-  `5674402`; all 4 CI jobs green on the runner; **two** independent reviewer passes — APPROVE,
-  then APPROVE WITH NITS after fix `1a41d6a` made the edit-action tag write best-effort).
+- **Phase:** Slice 5 — Feeds (New/Hot/Top/Following) **🟡 built; all local suites green; awaiting
+  CI on a PR** (branch `slice-5-feeds`). Local: **69 unit / 25 integration / 99 pgTAP / 9 E2E**.
+  Decisions ([ADR-0015](docs/adr/0015-feeds-hot-score-and-follows.md)): **epoch-additive Reddit
+  `hot_score`** (recompute only on rating change, **no cron**); **Hot keyset via a SQL RPC
+  `hot_feed_page`** (cursor = last id — PostgREST truncates float8, so a float cursor dup'd/skipped
+  rows, proven + caught by an integration test); **minimal read-only `follows` table** added now
+  (overseer call) driving Following, with the follow **button deferred to Slice 10**. No ratings
+  yet → **Hot mirrors New, Top = recency-within-window** (the stable seam Slice 6 fills).
+  **Next: open the PR, get CI green + a reviewer pass; then Slice 6 — Ratings.**
+- **Slice 4 — Tags, metadata & "similar posts"** **✅ DONE & merged** (PR #6, merge `5674402`;
+  all 4 CI jobs green; two reviewer passes — APPROVE → APPROVE WITH NITS after `1a41d6a`).
   Tags-only (overseer: **no `posts.metadata` column**); similarity = tag overlap behind the
   stable pure `findSimilar` seam ([ADR-0014](docs/adr/0014-tags-and-similar-posts.md)).
-  **Next: Slice 5 — Feeds (New/Hot/Top/Following)** — start in a fresh session.
 - **Slice 3 — Posts & the board proper** **✅ DONE & merged** (PR #4 merge `fbf62da`;
   drift-audit cleanups PR #5 merge `5e71f22`; all CI green).
 - **Last update:** 2026-06-22.
@@ -49,6 +56,24 @@ runner) · ⛔ Blocked.
   **Deferred follow-up (reviewer [Low], non-blocking):** `getSimilarPosts` 200-row candidate cap has no
   `ORDER BY`, so at scale (a tag with >200 posts) it can truncate before ranking — ADR-accepted as coarse
   until pgvector; fold the deterministic-cap fix into the pgvector slice.
+- **Slice 5 (built, on `slice-5-feeds`):** pure `src/lib/domain/feed/` (`hotScore`, `windowStart`,
+  mode/window parsing); `src/lib/server/db/feeds.ts` (Hot/Top/Following, reusing `posts.ts` cover
+  helpers); unified **`/api/feed?mode=…`** (replaced `/api/board`); `posts.hot_score` column +
+  `posts_hot_idx` + `set_post_hot_score` BEFORE-INSERT trigger + the **`hot_feed_page`** keyset RPC
+  (SECURITY INVOKER, id cursor); minimal read-only **`follows`** table (RLS: own-edges SELECT only);
+  `FeedSwitcher` + per-mode empty states on `/`. Clients can't write `hot_score` (no grant) and
+  can't write `follows` (no grant). Integration set `fileParallelism:false` (shared DB → serialize).
+  Tests: **69 unit / 25 integration / 99 pgTAP / 9 E2E**, green locally. See
+  [ADR-0015](docs/adr/0015-feeds-hot-score-and-follows.md). **Reaffirm at Slice 6:** add the SQL
+  log10(score) term to `set_post_hot_score` + a SQL↔TS parity test; switch Top's primary sort to
+  rating count (interfaces already stable). **Reviewer pass (fresh context, read-only): APPROVE
+  WITH NITS, no blockers** — verified no client write on `hot_score`/`follows`, RPC is SECURITY
+  INVOKER + approved-only, cursor-injection blocked, `getClaims()` authz, formula parity. Applied:
+  explicit `SECURITY INVOKER` in the migration (N2) + a deleted-cursor trade-off comment (L1).
+  **Deferred (non-blocking):** (L1) Hot pagination ends early if the cursor post is deleted/held
+  mid-scroll (boundary CTE empty → empty page; refresh fixes; no dup/skip) — revisit if it bites;
+  (L2) `MAX_FOLLOWEES=1000` cap silently drops authors for a heavy follower — fold into Slice 10
+  when the follow write surface lands.
 - **Drift audit (CLAUDE.md §11, Slices 0–3) — 2026-06-22:** **On track; no architectural or
   security drift.** Confirmed: layers respected, `getClaims()` only, RLS + column grants, no
   premature columns/tables/features. 3 trivial cleanups applied on `chore/slice-3-followups`:
@@ -58,9 +83,11 @@ runner) · ⛔ Blocked.
   keeps UI auth out of E2E (`e2e/auth.test.ts`). Authed create/edit/delete are proven by the
   **integration** suite against real RLS; E2E covers the anonymous board→detail render + the
   `/create` guard + a malformed-cursor 400.
-- **Out of scope (binding) for shipped slices:** feeds/ranking (Slice 5), ratings (Slice 6),
-  comments (Slice 7). No counters/`hot_score`/`metadata` columns yet (additive in their slices);
-  pgvector, tag moderation & trending tags remain out of scope ([ADR-0014](docs/adr/0014-tags-and-similar-posts.md)).
+- **Out of scope (binding) for shipped/in-flight slices:** ratings & vote integrity (Slice 6),
+  comments (Slice 7), the follow **button**/friendships (Slice 10). `hot_score` is built (Slice 5)
+  but carries no popularity signal until ratings; no `rating_count/sum`/`comment_count`/`metadata`
+  columns yet (additive in their slices); pgvector, tag moderation & trending tags remain out of
+  scope ([ADR-0014](docs/adr/0014-tags-and-similar-posts.md), [ADR-0015](docs/adr/0015-feeds-hot-score-and-follows.md)).
 - **Repo gotcha:** GitHub does NOT reliably auto-run CI on push; force a run via PR
   close/reopen. Don't rename a CI job `name:` without updating the branch-protection
   required-check list. `supabase db diff` drops `REVOKE`/grants — hand-add them.
@@ -91,7 +118,7 @@ slice that depends on them:
 | 2 | Media upload spine (image → board) | ✅ Done | CI green (PR #3); reviewer APPROVE WITH NITS | Merged `11d0255`. Deploy items deferred (#2/💳); see ADR-0012 |
 | 3 | Posts & the board proper | ✅ Done | CI green (PR #4); reviewer APPROVE; drift audit clean | Merged `fbf62da`. Atomic `create_post` RPC; keyset board; see ADR-0013 |
 | 4 | Tags, metadata & similar posts | ✅ Done | CI green (PR #6); reviewer APPROVE / APPROVE WITH NITS | Merged `5674402`. `tags`+`post_tags`+RLS+`set_post_tags` RPC; pure `findSimilar`; `/api/posts/[id]/similar`; tag UI. Tags-only (no `metadata` col); see ADR-0014 |
-| 5 | Feeds: New/Hot/Top/Following | ⬜ Not started | — | |
+| 5 | Feeds: New/Hot/Top/Following | 🟡 Built; awaiting CI | Local: 69 unit / 25 int / 99 pgTAP / 9 E2E | `slice-5-feeds`. Epoch-additive `hot_score` (no cron); Hot keyset via `hot_feed_page` RPC (float cursor doesn't round-trip); minimal read-only `follows`; Hot≈New, Top=recency until ratings (Slice 6). See ADR-0015 |
 | 6 | Ratings & vote integrity + rate limit | ⬜ Not started | — | |
 | 7 | Comments | ⬜ Not started | — | |
 | 8 | Trust & Safety (classify/queue/reports) | ⬜ Not started | — | ⛔#2 CSAM code |
@@ -112,6 +139,19 @@ seam (💳⛔#2) · OAuth/MFA · native mobile. (See [ROADMAP.md](ROADMAP.md).)
 > Significant decisions get an [ADR](docs/adr/); this is the quick chronological
 > index. Product/legal/tech assumptions live in [ASSUMPTIONS.md](ASSUMPTIONS.md).
 
+- **2026-06-22** — Slice 5 (feeds) **built** on `slice-5-feeds`; all local suites green (69 unit /
+  25 integration / 99 pgTAP / 9 E2E). **Decisions ([ADR-0015](docs/adr/0015-feeds-hot-score-and-follows.md),
+  refines ADR-0006):** (a) **epoch-additive Reddit `hot_score`** = `log10(max(score,1)) + epoch/45000`
+  — absolute-time term means recompute is needed only on **rating change** (Slice 6), **no cron**
+  (drops ADR-0006's scheduled recompute, no spend). (b) **Hot paginates via a SQL keyset RPC**
+  (`hot_feed_page`, cursor = last id): PostgREST truncates `float8` to ~15 digits so a `hot_score`
+  float cursor **doesn't round-trip** → dup'd/skipped rows at page edges (probed + caught by an
+  integration test); New/Top/Following keyset on `(created_at,id)` (text, exact). (c) **Minimal
+  read-only `follows` table** added now (overseer call) — Following works + is tested; the follow
+  **button + write policies are Slice 10**. (d) No ratings yet → Hot mirrors New, Top = recency in
+  window. **Lessons:** `db diff` again dropped the `REVOKE ALL` on the new `follows` table + the
+  function `REVOKE EXECUTE … FROM public` (hand-added both) + re-emitted the no-op `post_media`
+  grant reshuffle (dropped). Integration files share one DB → set `fileParallelism:false`.
 - **2026-06-22** — Slice 4 (tags + "similar posts") **merged** (PR #6, merge `5674402`); all 4
   CI jobs green on the runner; two independent reviewer passes (APPROVE → APPROVE WITH NITS).
   Suites: 57 unit / 19 integration / 80 pgTAP / 8 E2E. **Decision

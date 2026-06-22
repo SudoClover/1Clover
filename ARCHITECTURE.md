@@ -42,7 +42,7 @@ Two managed vendors, each doing one swappable job:
         │   originals      thumbnails/transcodes            • validate (magic bytes, caps, re-encode, EXIF strip)
         │   + versioning   served via signed URLs           • Workers AI safety classification (routing signal)
         │                                                    • flip moderation_state pending→approved|held
-        │  Cron Worker (feed decay, cleanups)  ·  Turnstile  ·  CSAM Scanning Tool (media zone)
+        │  Cron Worker (cleanups; feeds need none — Hot is epoch-additive)  ·  Turnstile  ·  CSAM Scanning Tool
         └────────────────────────────────────────────────────────────────────────────────────────────────────┘
                                             │
                                             ▼
@@ -161,7 +161,7 @@ profiles ──< posts ──< post_media >── media          posts ──< c
 | Table | Key columns | Notes |
 |---|---|---|
 | `profiles` | `id PK→auth.users`, `username uniq`, `display_name`, `bio`, `avatar_media_id`, `birthdate`, `created_at` | Created by a signup trigger from `auth.users`. `birthdate` powers the age gate. Public read of non-sensitive cols; self-write. |
-| `follows` | `follower_id`, `followee_id`, `created_at`, PK(follower,followee) | One-way; drives the **Following** feed. No approval. |
+| `follows` | `follower_id`, `followee_id`, `created_at`, PK(follower,followee) | One-way; drives the **Following** feed. No approval. **Slice 5 builds it minimally — read-only from clients** (a user reads their own edges); the follow button + write policies arrive in Slice 10 ([ADR-0015](docs/adr/0015-feeds-hot-score-and-follows.md)). |
 | `friendships` | `requester_id`, `addressee_id`, `status friend_status`, `created_at`, `responded_at`, uniq(pair) | Mutual once `accepted`; **gates DMs**. Canonical pair ordering to dedupe. |
 | `user_blocks` | `blocker_id`, `blocked_id`, `created_at`, uniq(pair) | Hides content both ways; blocks DM/follow/friend. |
 
@@ -170,7 +170,7 @@ profiles ──< posts ──< post_media >── media          posts ──< c
 | Table | Key columns | Notes |
 |---|---|---|
 | `media` | `id PK`, `owner_id→auth.users`, `storage_key`, `kind media_kind`, `mime_type`, `byte_size`, `width`, `height`, `duration_ms`, `checksum`, `variants jsonb` (thumbnail/derived keys), `processing_state`, `moderation_state`, `created_at` | The user's **library**. `storage_key` is server-generated; original re-encoded; only safe copy served. Bytes live in R2, never here. |
-| `posts` | `id PK`, `author_id→auth.users`, `title`, `description`, `metadata jsonb`, `moderation_state`, `rating_count`, `rating_sum`, `comment_count`, `hot_score`, `created_at`, `edited_at` | Counters/`hot_score` are denormalized caches updated by triggers/jobs for feed performance. `metadata` = structured discovery fields. **Slice 3 builds** `id/author_id/title/description/moderation_state/created_at/edited_at` only. **Slice 4 adds tags but deliberately NO `metadata` column** (overseer decision — similarity is tag-overlap only; [ADR-0014](docs/adr/0014-tags-and-similar-posts.md)); `metadata`/counters/`hot_score` remain additive later (counters/`hot_score` Slices 5–6, `metadata` if a concrete need appears). `moderation_state` defaults `approved` (post text moderated reactively — reports/queue, Slice 8); created atomically with its `post_media` via the `create_post` RPC ([ADR-0013](docs/adr/0013-client-writable-posts-atomic-create.md)). First **client-writable** table. |
+| `posts` | `id PK`, `author_id→auth.users`, `title`, `description`, `metadata jsonb`, `moderation_state`, `rating_count`, `rating_sum`, `comment_count`, `hot_score`, `created_at`, `edited_at` | Counters/`hot_score` are denormalized caches updated by triggers/jobs for feed performance. `metadata` = structured discovery fields. **Slice 3 builds** `id/author_id/title/description/moderation_state/created_at/edited_at` only. **Slice 4 adds tags but deliberately NO `metadata` column** (overseer decision — similarity is tag-overlap only; [ADR-0014](docs/adr/0014-tags-and-similar-posts.md)); **Slice 5 adds `hot_score`** (trigger-set, not client-writable; epoch-additive Reddit score, recompute only on rating change — [ADR-0015](docs/adr/0015-feeds-hot-score-and-follows.md)); rating counters land in Slice 6 and `metadata` only if a concrete need appears. `moderation_state` defaults `approved` (post text moderated reactively — reports/queue, Slice 8); created atomically with its `post_media` via the `create_post` RPC ([ADR-0013](docs/adr/0013-client-writable-posts-atomic-create.md)). First **client-writable** table. |
 | `post_media` | `post_id`, `media_id`, `position`, PK(post,media) | A post references 1..n library media (carousel); media reusable. Owner-only link/reorder/unlink via RLS; `edited_at` server-stamped by trigger. |
 | `tags` | `id PK`, `name uniq` (normalized, `CHECK ~ ^[a-z0-9-]{1,30}$`), `created_at` | Discovery primitive (**Slice 4**). Global/shared — that sharing is what powers tag overlap. Public read; any signed-in user may introduce a tag; clients never update/delete (service_role/moderator only). |
 | `post_tags` | `post_id`, `tag_id`, PK(post,tag) | Many-to-many; drives tag-overlap "similar posts" (**Slice 4**). Owner-only link/unlink via RLS; a post's tags are replaced atomically by the `set_post_tags` RPC (SECURITY INVOKER, get-or-create + relink). [ADR-0014](docs/adr/0014-tags-and-similar-posts.md). |
@@ -280,17 +280,20 @@ write to storage directly.
 ## 6. Feeds, ranking & recommendations
 
 (See [ADR-0006](docs/adr/0006-feeds-and-realtime.md),
-[ADR-0009](docs/adr/0009-recommendations-tags-then-vectors.md).)
+[ADR-0009](docs/adr/0009-recommendations-tags-then-vectors.md),
+[ADR-0015](docs/adr/0015-feeds-hot-score-and-follows.md).)
 
 | Feed | Source |
 |---|---|
-| **New** | `posts` where `approved`, `ORDER BY created_at DESC`, keyset pagination |
-| **Hot** | `hot_score DESC` — time-decayed score stored on `posts`, recomputed on rating change + by the Cron Worker |
-| **Top** day/week/all | rating aggregates within a time window, indexed |
-| **Following** | posts by users the viewer `follows`, newest-first |
+| **New** | `posts` where `approved`, `ORDER BY created_at DESC`, keyset on `(created_at, id)` |
+| **Hot** | `hot_score DESC` — stored on `posts`; **epoch-additive** Reddit score, so it needs recompute only on **rating change** (Slice 6), no cron. Keyset via the `hot_feed_page` SQL RPC (cursor = last id; the float never round-trips to the client) |
+| **Top** day/week/all | approved posts within a time window; recency for now, **rating aggregates** once ratings land (Slice 6) |
+| **Following** | approved posts by users the viewer `follows`, newest-first; empty until Slice 10 adds the follow button |
 
-- **Ranking math is pure** in `src/lib/domain/feed/` (e.g. `hotScore(score, ageSeconds)`),
-  unit-tested without a DB; SQL applies it.
+- **Ranking math is pure** in `src/lib/domain/feed/` (`hotScore(score, createdAtMs)` +
+  `windowStart(window, now)`), unit-tested without a DB; the SQL trigger mirrors `hotScore`
+  and an integration test asserts they agree (no silent drift). See
+  [ADR-0015](docs/adr/0015-feeds-hot-score-and-follows.md).
 - **"Similar posts"** (post detail page): launch = tag + `metadata` overlap score
   in `src/lib/domain/recommend/`; later = `pgvector` embeddings behind the same
   `findSimilar(postId)` interface — no caller changes.
@@ -299,14 +302,20 @@ write to storage directly.
 > **Slice 3 build status (posts & the board).** The board (`/`) and post detail
 > (`/post/[id]`) are built: the **New** view above is realized as approved posts
 > newest-first with **keyset** infinite scroll (cursor on `(created_at, id)` over the
-> partial `approved` index; next pages via `/api/board`). Each card's cover is the
-> lowest-`position` approved+ready media's thumbnail. Data access is
-> `src/lib/server/db/posts.ts` (the **authed per-request client** + RLS, not
-> service-role); create goes through the atomic **`create_post`** RPC
-> ([ADR-0013](docs/adr/0013-client-writable-posts-atomic-create.md)); owner edit/delete
-> are single-statement writes gated by RLS. New components: `PostCard`, `Masonry`,
-> `PostDetail`. Hot/Top/Following + the `hot_score` column and ranking math remain
-> Slice 5.
+> partial `approved` index). Each card's cover is the lowest-`position` approved+ready
+> media's thumbnail. Data access is `src/lib/server/db/posts.ts` (the **authed
+> per-request client** + RLS, not service-role); create goes through the atomic
+> **`create_post`** RPC ([ADR-0013](docs/adr/0013-client-writable-posts-atomic-create.md));
+> owner edit/delete are single-statement writes gated by RLS. New components: `PostCard`,
+> `Masonry`, `PostDetail`.
+>
+> **Slice 5 build status (feeds).** All four feed modes are live behind one
+> `/api/feed?mode=…` endpoint + a `FeedSwitcher`, served by `src/lib/server/db/feeds.ts`
+> and the pure `src/lib/domain/feed/`. The `posts.hot_score` column (trigger-set, not
+> client-writable) + `posts_hot_idx` + the `hot_feed_page` keyset RPC land now; the minimal
+> read-only `follows` table drives Following. **No ratings yet (Slice 6), so Hot mirrors New
+> and Top is recency-within-window** — the stable seam ratings slot into.
+> ([ADR-0015](docs/adr/0015-feeds-hot-score-and-follows.md).)
 
 ---
 

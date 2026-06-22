@@ -145,7 +145,13 @@ in later without caller changes.
 
 ---
 
-## Slice 5 — Feeds: New / Hot / Top / Following
+## Slice 5 — Feeds: New / Hot / Top / Following  🟡 built; awaiting CI (`slice-5-feeds`)
+
+> **Built** ([ADR-0015](docs/adr/0015-feeds-hot-score-and-follows.md)): `hot_score` is
+> **epoch-additive** so it needs **no Cron** recompute (only on rating change, Slice 6);
+> Hot keyset is a **SQL RPC** (`hot_feed_page`, id cursor) because a float cursor can't
+> round-trip PostgREST; a **minimal read-only `follows`** table landed here (overseer call,
+> follow button → Slice 10). No ratings yet → **Hot mirrors New, Top = recency-in-window**.
 
 **Goal.** Switchable feed modes. New (recency), Hot (decayed score), Top
 day/week/all (windowed aggregates), Following (from the follow graph — minimal

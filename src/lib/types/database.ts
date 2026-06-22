@@ -34,6 +34,24 @@ export type Database = {
   }
   public: {
     Tables: {
+      follows: {
+        Row: {
+          created_at: string
+          followee_id: string
+          follower_id: string
+        }
+        Insert: {
+          created_at?: string
+          followee_id: string
+          follower_id: string
+        }
+        Update: {
+          created_at?: string
+          followee_id?: string
+          follower_id?: string
+        }
+        Relationships: []
+      }
       media: {
         Row: {
           byte_size: number
@@ -154,6 +172,7 @@ export type Database = {
           created_at: string
           description: string | null
           edited_at: string | null
+          hot_score: number
           id: string
           moderation_state: Database["public"]["Enums"]["moderation_state"]
           title: string
@@ -163,6 +182,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           edited_at?: string | null
+          hot_score?: number
           id?: string
           moderation_state?: Database["public"]["Enums"]["moderation_state"]
           title: string
@@ -172,6 +192,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           edited_at?: string | null
+          hot_score?: number
           id?: string
           moderation_state?: Database["public"]["Enums"]["moderation_state"]
           title?: string
@@ -231,6 +252,10 @@ export type Database = {
       create_post: {
         Args: { p_description: string; p_media_ids: string[]; p_title: string }
         Returns: string
+      }
+      hot_feed_page: {
+        Args: { p_cursor_id?: string; p_limit: number }
+        Returns: string[]
       }
       set_post_tags: {
         Args: { p_post_id: string; p_tag_names: string[] }
