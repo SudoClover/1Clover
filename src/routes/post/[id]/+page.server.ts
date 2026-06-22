@@ -30,7 +30,12 @@ export const actions: Actions = {
 		if (!(await updatePost(locals.supabase, params.id, value)))
 			error(403, 'You can only edit your own post.');
 		// Ownership is confirmed by the update above; replace the post's tags to match.
-		await setPostTags(locals.supabase, params.id, tags.value);
+		// Best-effort (like create): a tag hiccup must not 500 an edit whose text already saved.
+		try {
+			await setPostTags(locals.supabase, params.id, tags.value);
+		} catch (e) {
+			console.warn('[edit] setPostTags failed:', (e as Error).message);
+		}
 		return { edited: true };
 	},
 	delete: async ({ params, locals }) => {
