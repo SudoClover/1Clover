@@ -14,13 +14,14 @@ runner) · ⛔ Blocked.
 
 ## Current session
 
-- **Phase:** Slice 4 — Tags, metadata & "similar posts" — **🟡 BUILT on `slice-4-tags`
-  (off `main` `5e71f22`); all local suites green; awaiting CI + PR + reviewer gate.**
-  Tags-only this slice (overseer: **no `posts.metadata` column**); similarity = tag overlap
-  behind the stable pure `findSimilar` seam ([ADR-0014](docs/adr/0014-tags-and-similar-posts.md)).
-  **Next:** open PR → force CI → reviewer agent → overseer merge; then **Slice 5 — Feeds**.
-- **Slice 3 — Posts & the board proper** **✅ DONE & merged** (PR #4: `8d37b3b` + review-fix
-  `a4c50fa`, merge `fbf62da`; drift-audit cleanups PR #5 merge `5e71f22`; all CI green).
+- **Phase:** Slice 4 — Tags, metadata & "similar posts" **✅ DONE & merged** (PR #6, merge
+  `5674402`; all 4 CI jobs green on the runner; **two** independent reviewer passes — APPROVE,
+  then APPROVE WITH NITS after fix `1a41d6a` made the edit-action tag write best-effort).
+  Tags-only (overseer: **no `posts.metadata` column**); similarity = tag overlap behind the
+  stable pure `findSimilar` seam ([ADR-0014](docs/adr/0014-tags-and-similar-posts.md)).
+  **Next: Slice 5 — Feeds (New/Hot/Top/Following)** — start in a fresh session.
+- **Slice 3 — Posts & the board proper** **✅ DONE & merged** (PR #4 merge `fbf62da`;
+  drift-audit cleanups PR #5 merge `5e71f22`; all CI green).
 - **Last update:** 2026-06-22.
 - **Slices 0–2:** ✅ DONE & merged — PR #1 (`e1e1299`), PR #2 (`2463c36`), **PR #3
   (`aafd78a` / merge `11d0255`)**. Slice 2 reviewer gate APPROVE WITH NITS (applied);
@@ -38,6 +39,16 @@ runner) · ⛔ Blocked.
   `/create` (guarded). XSS-safe (text render, never `{@html}`). Clients still can't write
   `moderation_state`/`edited_at`. Tests: 42 unit / 16 integration (two-user RLS, atomic
   rollback, keyset) / 61 pgTAP / 8 E2E. See [ADR-0013](docs/adr/0013-client-writable-posts-atomic-create.md).
+- **Slice 4 (shipped) — what's on `main`:** `tags` (global/shared, `name` charset `CHECK`) +
+  `post_tags` join + RLS (mirrors `post_media`) + the **`set_post_tags`** SECURITY INVOKER RPC
+  (owner-checked, atomic relink); pure `src/lib/domain/tags/` + `src/lib/domain/recommend/find-similar.ts`;
+  `src/lib/server/db/tags.ts` (coarse DB filter → pure `findSimilar`, reuses `posts.ts` cover helpers);
+  `/api/posts/[id]/similar`; tag input on create + owner-edit; tag chips + `SimilarPosts` on detail
+  (escaped text). Tests: 57 unit / 19 integration / 80 pgTAP / 8 E2E. `posts.ts` now 209 lines (1 over
+  soft from an export comment — new code lives in `tags.ts`). See [ADR-0014](docs/adr/0014-tags-and-similar-posts.md).
+  **Deferred follow-up (reviewer [Low], non-blocking):** `getSimilarPosts` 200-row candidate cap has no
+  `ORDER BY`, so at scale (a tag with >200 posts) it can truncate before ranking — ADR-accepted as coarse
+  until pgvector; fold the deterministic-cap fix into the pgvector slice.
 - **Drift audit (CLAUDE.md §11, Slices 0–3) — 2026-06-22:** **On track; no architectural or
   security drift.** Confirmed: layers respected, `getClaims()` only, RLS + column grants, no
   premature columns/tables/features. 3 trivial cleanups applied on `chore/slice-3-followups`:
@@ -47,9 +58,9 @@ runner) · ⛔ Blocked.
   keeps UI auth out of E2E (`e2e/auth.test.ts`). Authed create/edit/delete are proven by the
   **integration** suite against real RLS; E2E covers the anonymous board→detail render + the
   `/create` guard + a malformed-cursor 400.
-- **Out of scope (binding):** tags/metadata (Slice 4), feeds/ranking (Slice 5), ratings
-  (Slice 6), comments (Slice 7), similar posts. No counters/`hot_score` columns yet
-  (additive in their slices).
+- **Out of scope (binding) for shipped slices:** feeds/ranking (Slice 5), ratings (Slice 6),
+  comments (Slice 7). No counters/`hot_score`/`metadata` columns yet (additive in their slices);
+  pgvector, tag moderation & trending tags remain out of scope ([ADR-0014](docs/adr/0014-tags-and-similar-posts.md)).
 - **Repo gotcha:** GitHub does NOT reliably auto-run CI on push; force a run via PR
   close/reopen. Don't rename a CI job `name:` without updating the branch-protection
   required-check list. `supabase db diff` drops `REVOKE`/grants — hand-add them.
@@ -79,7 +90,7 @@ slice that depends on them:
 | 1 | Auth & profiles | ✅ Done | CI green; reviewer APPROVE WITH NITS | Merged via PR #2 (`2463c36`) |
 | 2 | Media upload spine (image → board) | ✅ Done | CI green (PR #3); reviewer APPROVE WITH NITS | Merged `11d0255`. Deploy items deferred (#2/💳); see ADR-0012 |
 | 3 | Posts & the board proper | ✅ Done | CI green (PR #4); reviewer APPROVE; drift audit clean | Merged `fbf62da`. Atomic `create_post` RPC; keyset board; see ADR-0013 |
-| 4 | Tags, metadata & similar posts | 🟡 Built (awaiting CI/PR) | Local: 57 unit / 19 integ / 80 pgTAP / 8 E2E green | `tags`+`post_tags`+RLS+`set_post_tags` RPC; pure `findSimilar`; `/api/posts/[id]/similar`; tag UI. Tags-only (no `metadata` col); see ADR-0014 |
+| 4 | Tags, metadata & similar posts | ✅ Done | CI green (PR #6); reviewer APPROVE / APPROVE WITH NITS | Merged `5674402`. `tags`+`post_tags`+RLS+`set_post_tags` RPC; pure `findSimilar`; `/api/posts/[id]/similar`; tag UI. Tags-only (no `metadata` col); see ADR-0014 |
 | 5 | Feeds: New/Hot/Top/Following | ⬜ Not started | — | |
 | 6 | Ratings & vote integrity + rate limit | ⬜ Not started | — | |
 | 7 | Comments | ⬜ Not started | — | |
@@ -101,8 +112,9 @@ seam (💳⛔#2) · OAuth/MFA · native mobile. (See [ROADMAP.md](ROADMAP.md).)
 > Significant decisions get an [ADR](docs/adr/); this is the quick chronological
 > index. Product/legal/tech assumptions live in [ASSUMPTIONS.md](ASSUMPTIONS.md).
 
-- **2026-06-22** — Slice 4 built end-to-end (tags + "similar posts"); all local suites green
-  (57 unit / 19 integration / 80 pgTAP / 8 E2E), awaiting CI. **Decision
+- **2026-06-22** — Slice 4 (tags + "similar posts") **merged** (PR #6, merge `5674402`); all 4
+  CI jobs green on the runner; two independent reviewer passes (APPROVE → APPROVE WITH NITS).
+  Suites: 57 unit / 19 integration / 80 pgTAP / 8 E2E. **Decision
   ([ADR-0014](docs/adr/0014-tags-and-similar-posts.md)):** **tags-only this slice — no
   `posts.metadata` column** (overseer call; the ROADMAP *Touches* list + scope discipline
   win over the goal-line prose). `tags` is global/shared; `post_tags` is the owner-owned join
