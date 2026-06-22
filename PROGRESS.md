@@ -14,15 +14,17 @@ runner) · ⛔ Blocked.
 
 ## Current session
 
-- **Phase:** Slice 5 — Feeds (New/Hot/Top/Following) **🟡 built; all local suites green; awaiting
-  CI on a PR** (branch `slice-5-feeds`). Local: **69 unit / 25 integration / 99 pgTAP / 9 E2E**.
+- **Phase:** Slice 5 — Feeds (New/Hot/Top/Following) **✅ DONE & merged** (PR #8, merge `c7cde19`;
+  all 4 CI jobs green on the runner across both pushes; reviewer pass — **APPROVE WITH NITS**, no
+  blockers; N2 + L1 applied in `5cc502e`). Suites: **69 unit / 25 integration / 99 pgTAP / 9 E2E**.
   Decisions ([ADR-0015](docs/adr/0015-feeds-hot-score-and-follows.md)): **epoch-additive Reddit
   `hot_score`** (recompute only on rating change, **no cron**); **Hot keyset via a SQL RPC
   `hot_feed_page`** (cursor = last id — PostgREST truncates float8, so a float cursor dup'd/skipped
   rows, proven + caught by an integration test); **minimal read-only `follows` table** added now
   (overseer call) driving Following, with the follow **button deferred to Slice 10**. No ratings
   yet → **Hot mirrors New, Top = recency-within-window** (the stable seam Slice 6 fills).
-  **Next: open the PR, get CI green + a reviewer pass; then Slice 6 — Ratings.**
+  **Next: Slice 6 — Ratings & vote integrity + rate limiting** — start in a fresh session.
+  ⚠️ Overseer item first: confirm **rating model = single like/upvote?** (default yes; see Open items).
 - **Slice 4 — Tags, metadata & "similar posts"** **✅ DONE & merged** (PR #6, merge `5674402`;
   all 4 CI jobs green; two reviewer passes — APPROVE → APPROVE WITH NITS after `1a41d6a`).
   Tags-only (overseer: **no `posts.metadata` column**); similarity = tag overlap behind the
@@ -118,7 +120,7 @@ slice that depends on them:
 | 2 | Media upload spine (image → board) | ✅ Done | CI green (PR #3); reviewer APPROVE WITH NITS | Merged `11d0255`. Deploy items deferred (#2/💳); see ADR-0012 |
 | 3 | Posts & the board proper | ✅ Done | CI green (PR #4); reviewer APPROVE; drift audit clean | Merged `fbf62da`. Atomic `create_post` RPC; keyset board; see ADR-0013 |
 | 4 | Tags, metadata & similar posts | ✅ Done | CI green (PR #6); reviewer APPROVE / APPROVE WITH NITS | Merged `5674402`. `tags`+`post_tags`+RLS+`set_post_tags` RPC; pure `findSimilar`; `/api/posts/[id]/similar`; tag UI. Tags-only (no `metadata` col); see ADR-0014 |
-| 5 | Feeds: New/Hot/Top/Following | 🟡 Built; awaiting CI | Local: 69 unit / 25 int / 99 pgTAP / 9 E2E | `slice-5-feeds`. Epoch-additive `hot_score` (no cron); Hot keyset via `hot_feed_page` RPC (float cursor doesn't round-trip); minimal read-only `follows`; Hot≈New, Top=recency until ratings (Slice 6). See ADR-0015 |
+| 5 | Feeds: New/Hot/Top/Following | ✅ Done | CI green (PR #8); reviewer APPROVE WITH NITS | Merged `c7cde19`. Epoch-additive `hot_score` (no cron); Hot keyset via `hot_feed_page` RPC (float cursor doesn't round-trip); minimal read-only `follows`; Hot≈New, Top=recency until ratings (Slice 6). See ADR-0015 |
 | 6 | Ratings & vote integrity + rate limit | ⬜ Not started | — | |
 | 7 | Comments | ⬜ Not started | — | |
 | 8 | Trust & Safety (classify/queue/reports) | ⬜ Not started | — | ⛔#2 CSAM code |
