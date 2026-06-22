@@ -14,9 +14,13 @@ runner) · ⛔ Blocked.
 
 ## Current session
 
-- **Phase:** Slice 3 — Posts & the board proper **✅ DONE & merged** (PR #4: `8d37b3b`
-  + review-fix `a4c50fa`, merge `fbf62da`; all 4 CI jobs green; reviewer gate APPROVE).
-  **Next: Slice 4 — Tags, metadata & "similar posts"** (start in a fresh session).
+- **Phase:** Slice 4 — Tags, metadata & "similar posts" — **🟡 BUILT on `slice-4-tags`
+  (off `main` `5e71f22`); all local suites green; awaiting CI + PR + reviewer gate.**
+  Tags-only this slice (overseer: **no `posts.metadata` column**); similarity = tag overlap
+  behind the stable pure `findSimilar` seam ([ADR-0014](docs/adr/0014-tags-and-similar-posts.md)).
+  **Next:** open PR → force CI → reviewer agent → overseer merge; then **Slice 5 — Feeds**.
+- **Slice 3 — Posts & the board proper** **✅ DONE & merged** (PR #4: `8d37b3b` + review-fix
+  `a4c50fa`, merge `fbf62da`; drift-audit cleanups PR #5 merge `5e71f22`; all CI green).
 - **Last update:** 2026-06-22.
 - **Slices 0–2:** ✅ DONE & merged — PR #1 (`e1e1299`), PR #2 (`2463c36`), **PR #3
   (`aafd78a` / merge `11d0255`)**. Slice 2 reviewer gate APPROVE WITH NITS (applied);
@@ -75,7 +79,7 @@ slice that depends on them:
 | 1 | Auth & profiles | ✅ Done | CI green; reviewer APPROVE WITH NITS | Merged via PR #2 (`2463c36`) |
 | 2 | Media upload spine (image → board) | ✅ Done | CI green (PR #3); reviewer APPROVE WITH NITS | Merged `11d0255`. Deploy items deferred (#2/💳); see ADR-0012 |
 | 3 | Posts & the board proper | ✅ Done | CI green (PR #4); reviewer APPROVE; drift audit clean | Merged `fbf62da`. Atomic `create_post` RPC; keyset board; see ADR-0013 |
-| 4 | Tags, metadata & similar posts | ⬜ Not started | — | |
+| 4 | Tags, metadata & similar posts | 🟡 Built (awaiting CI/PR) | Local: 57 unit / 19 integ / 80 pgTAP / 8 E2E green | `tags`+`post_tags`+RLS+`set_post_tags` RPC; pure `findSimilar`; `/api/posts/[id]/similar`; tag UI. Tags-only (no `metadata` col); see ADR-0014 |
 | 5 | Feeds: New/Hot/Top/Following | ⬜ Not started | — | |
 | 6 | Ratings & vote integrity + rate limit | ⬜ Not started | — | |
 | 7 | Comments | ⬜ Not started | — | |
@@ -97,6 +101,18 @@ seam (💳⛔#2) · OAuth/MFA · native mobile. (See [ROADMAP.md](ROADMAP.md).)
 > Significant decisions get an [ADR](docs/adr/); this is the quick chronological
 > index. Product/legal/tech assumptions live in [ASSUMPTIONS.md](ASSUMPTIONS.md).
 
+- **2026-06-22** — Slice 4 built end-to-end (tags + "similar posts"); all local suites green
+  (57 unit / 19 integration / 80 pgTAP / 8 E2E), awaiting CI. **Decision
+  ([ADR-0014](docs/adr/0014-tags-and-similar-posts.md)):** **tags-only this slice — no
+  `posts.metadata` column** (overseer call; the ROADMAP *Touches* list + scope discipline
+  win over the goal-line prose). `tags` is global/shared; `post_tags` is the owner-owned join
+  (RLS mirrors `post_media`); a post's tags are replaced atomically by a **`set_post_tags`
+  SECURITY INVOKER RPC** (get-or-create + relink, explicit owner check). Similarity = **coarse
+  DB filter + pure `findSimilar`** (shared-tag count, deterministic tie-break) — the stable
+  seam pgvector slots into later; `/api/posts/[id]/similar` is the stable interface. Tag input
+  normalized/charset-capped in pure domain code + a DB `CHECK` backstop. **Lessons reconfirmed:**
+  `db diff` drops both the table `REVOKE ALL` *and* the function `REVOKE EXECUTE … FROM public`
+  — hand-add both (did); it also emitted a no-op `post_media` grant reshuffle — dropped it.
 - **2026-06-22** — Slice 3 built end-to-end (posts/post_media + board + detail + create +
   owner edit/delete); all local suites green. **Decision ([ADR-0013](docs/adr/0013-client-writable-posts-atomic-create.md)):**
   posts are the first client-writable tables, so writes use the **authed per-request

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import PostDetail from '$lib/components/PostDetail.svelte';
+	import SimilarPosts from '$lib/components/SimilarPosts.svelte';
 	import type { PostFieldError } from '$lib/domain/posts/post-input';
 	import type { PageData, ActionData } from './$types';
 
@@ -18,6 +19,14 @@
 	<p><a href="/">← Back to the board</a></p>
 
 	<PostDetail post={data.post} />
+
+	{#if data.tags.length > 0}
+		<ul class="tags">
+			{#each data.tags as tag (tag)}
+				<li>{tag}</li>
+			{/each}
+		</ul>
+	{/if}
 
 	{#if data.isOwner}
 		<section class="owner">
@@ -45,6 +54,12 @@
 					</label>
 					{#if errorFor('description')}<p class="error">{errorFor('description')}</p>{/if}
 
+					<label>
+						Tags
+						<input name="tags" placeholder="pixel-art, retro" value={data.tags.join(', ')} />
+					</label>
+					{#if form?.tagError}<p class="error">{form.tagError}</p>{/if}
+
 					<div class="actions">
 						<button type="submit">Save</button>
 						<button type="button" onclick={() => (editing = false)}>Cancel</button>
@@ -67,6 +82,8 @@
 			{/if}
 		</section>
 	{/if}
+
+	<SimilarPosts posts={data.similar} />
 </main>
 
 <style>
@@ -75,6 +92,21 @@
 		margin: 2rem auto;
 		padding: 0 1rem;
 		font-family: system-ui, sans-serif;
+	}
+	.tags {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+		list-style: none;
+		padding: 0;
+		margin: 0.75rem 0 0;
+	}
+	.tags li {
+		background: #eef;
+		color: #334;
+		border-radius: 999px;
+		padding: 0.15rem 0.65rem;
+		font-size: 0.8rem;
 	}
 	.owner {
 		margin-top: 2rem;

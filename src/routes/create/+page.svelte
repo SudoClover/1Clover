@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { PostFieldError } from '$lib/domain/posts/post-input';
+	import { MAX_TAGS_PER_POST } from '$lib/domain/tags/tag-input';
 	import type { PageData } from './$types';
 	import type { ActionData } from './$types';
 
@@ -31,6 +32,13 @@
 				<textarea name="description" maxlength="2000" rows="3">{form?.description ?? ''}</textarea>
 			</label>
 			{#if errorFor('description')}<p class="error">{errorFor('description')}</p>{/if}
+
+			<label>
+				Tags (optional)
+				<input name="tags" placeholder="pixel-art, retro, landscape" value={form?.tags ?? ''} />
+			</label>
+			<p class="hint">Comma-separated. Up to {MAX_TAGS_PER_POST} tags.</p>
+			{#if form?.tagError}<p class="error">{form.tagError}</p>{/if}
 
 			<fieldset>
 				<legend>Choose images</legend>
@@ -65,12 +73,18 @@
 		font-weight: 600;
 	}
 	input[name='title'],
+	input[name='tags'],
 	textarea {
 		display: block;
 		width: 100%;
 		margin-top: 0.25rem;
 		font: inherit;
 		padding: 0.4rem;
+	}
+	.hint {
+		margin: 0.25rem 0 0;
+		color: #666;
+		font-size: 0.8rem;
 	}
 	fieldset {
 		margin: 1.5rem 0;
