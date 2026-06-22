@@ -66,7 +66,14 @@ runner) · ⛔ Blocked.
   Tests: **69 unit / 25 integration / 99 pgTAP / 9 E2E**, green locally. See
   [ADR-0015](docs/adr/0015-feeds-hot-score-and-follows.md). **Reaffirm at Slice 6:** add the SQL
   log10(score) term to `set_post_hot_score` + a SQL↔TS parity test; switch Top's primary sort to
-  rating count (interfaces already stable).
+  rating count (interfaces already stable). **Reviewer pass (fresh context, read-only): APPROVE
+  WITH NITS, no blockers** — verified no client write on `hot_score`/`follows`, RPC is SECURITY
+  INVOKER + approved-only, cursor-injection blocked, `getClaims()` authz, formula parity. Applied:
+  explicit `SECURITY INVOKER` in the migration (N2) + a deleted-cursor trade-off comment (L1).
+  **Deferred (non-blocking):** (L1) Hot pagination ends early if the cursor post is deleted/held
+  mid-scroll (boundary CTE empty → empty page; refresh fixes; no dup/skip) — revisit if it bites;
+  (L2) `MAX_FOLLOWEES=1000` cap silently drops authors for a heavy follower — fold into Slice 10
+  when the follow write surface lands.
 - **Drift audit (CLAUDE.md §11, Slices 0–3) — 2026-06-22:** **On track; no architectural or
   security drift.** Confirmed: layers respected, `getClaims()` only, RLS + column grants, no
   premature columns/tables/features. 3 trivial cleanups applied on `chore/slice-3-followups`:

@@ -38,11 +38,14 @@ CREATE TRIGGER posts_set_hot_score BEFORE INSERT ON public.posts FOR EACH ROW EX
 
 -- Hot feed keyset (cursor = last page id). Resolves the (hot_score, id) boundary in SQL so
 -- the float never round-trips through the client (PostgREST truncates float8, which would
--- dup/skip rows at page edges). SECURITY INVOKER → RLS applies; Hot is public.
+-- dup/skip rows at page edges). SECURITY INVOKER → RLS applies; Hot is public. Trade-off: if
+-- the cursor post is deleted/held mid-scroll the boundary CTE is empty and the next page
+-- comes back empty (pagination ends early until refresh) — no dup/skip, acceptable.
 CREATE FUNCTION public.hot_feed_page(p_limit integer, p_cursor_id uuid DEFAULT NULL)
  RETURNS SETOF uuid
  LANGUAGE sql
  STABLE
+ SECURITY INVOKER
  SET search_path TO ''
 AS $function$
 	with boundary as (

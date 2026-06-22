@@ -84,6 +84,8 @@ create trigger posts_set_hot_score before insert on public.posts
 -- HERE, in SQL, so hot_score never round-trips through the client (PostgREST truncates
 -- float8, which would dup/skip rows at page edges). SECURITY INVOKER → RLS still applies;
 -- Hot is public, so anon/authenticated may execute.
+-- Trade-off: if the cursor post is deleted/held mid-scroll, the boundary CTE is empty and
+-- the next page returns empty (pagination ends early until refresh) — no dup/skip, accepted.
 create or replace function public.hot_feed_page(p_limit integer, p_cursor_id uuid default null)
 returns setof uuid
 language sql
