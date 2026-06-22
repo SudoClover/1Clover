@@ -28,7 +28,8 @@ interface MediaVariants {
 }
 
 // Embedded media for a post, in position order; filtered to approved+ready at render.
-const MEDIA_EMBED =
+// Exported so the tags layer (similar posts) builds cover thumbnails the same way.
+export const MEDIA_EMBED =
 	'post_media(position, media:media_id(id, width, height, variants, moderation_state, processing_state))';
 
 /** Newest-first page of approved posts, each with a cover thumbnail. Keyset cursor on
@@ -157,7 +158,7 @@ export async function listPostableMedia(client: DbClient, ownerId: string): Prom
 		.filter((x): x is LibraryItem => x !== null);
 }
 
-interface ReadyMedia {
+export interface ReadyMedia {
 	id: string;
 	width: number | null;
 	height: number | null;
@@ -165,7 +166,7 @@ interface ReadyMedia {
 }
 
 /** Approved+ready embedded media, in position order, with parsed variant keys. */
-function readyMedia(links: { position: number; media: MediaRow | null }[]): ReadyMedia[] {
+export function readyMedia(links: { position: number; media: MediaRow | null }[]): ReadyMedia[] {
 	return [...links]
 		.sort((a, b) => a.position - b.position)
 		.map((link) => link.media)
@@ -184,7 +185,7 @@ interface MediaRow {
 	processing_state: Database['public']['Enums']['processing_state'];
 }
 
-function coverFields(m: ReadyMedia): {
+export function coverFields(m: ReadyMedia): {
 	cover: string;
 	width: number | null;
 	height: number | null;

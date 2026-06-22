@@ -36,6 +36,7 @@ Alternatives: what we rejected and why.
 | [0011](0011-migrations-declarative.md) | Declarative schema + reviewed migrations, CI-to-prod only |
 | [0012](0012-slice2-media-spine-buildtest.md) | Realizing the media pipeline (ADR-0007) under the no-spend constraint |
 | [0013](0013-client-writable-posts-atomic-create.md) | Client-writable posts: atomic create via a SECURITY INVOKER RPC |
+| [0014](0014-tags-and-similar-posts.md) | Tags & "similar posts": tags-only this slice, pure overlap ranking behind a stable seam |
 
 All decisions trace back to the five principles (readable, AI-decodable, simple/
 layered/expandable, secure-by-default, media-as-references) and the overseer

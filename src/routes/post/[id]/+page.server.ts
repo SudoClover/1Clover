@@ -1,12 +1,18 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { validatePostEdit } from '$lib/domain/posts/post-input';
+import { validateTags } from '$lib/domain/tags/tag-input';
 import { deletePost, getPostById, updatePost } from '$lib/server/db/posts';
+import { getPostTags, getSimilarPosts, setPostTags } from '$lib/server/db/tags';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	const post = await getPostById(locals.supabase, params.id);
 	if (!post) error(404, 'Post not found.');
-	return { post, isOwner: locals.claims?.sub === post.authorId };
+	const [tags, similar] = await Promise.all([
+		getPostTags(locals.supabase, params.id),
+		getSimilarPosts(locals.supabase, params.id)
+	]);
+	return { post, tags, similar, isOwner: locals.claims?.sub === post.authorId };
 };
 
 export const actions: Actions = {
@@ -19,9 +25,12 @@ export const actions: Actions = {
 			title: String(form.get('title') ?? ''),
 			description: String(form.get('description') ?? '')
 		});
-		if (errors.length > 0) return fail(400, { errors });
+		const tags = validateTags(String(form.get('tags') ?? ''));
+		if (errors.length > 0 || tags.error) return fail(400, { errors, tagError: tags.error });
 		if (!(await updatePost(locals.supabase, params.id, value)))
 			error(403, 'You can only edit your own post.');
+		// Ownership is confirmed by the update above; replace the post's tags to match.
+		await setPostTags(locals.supabase, params.id, tags.value);
 		return { edited: true };
 	},
 	delete: async ({ params, locals }) => {
