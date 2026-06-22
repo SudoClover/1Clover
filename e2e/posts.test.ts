@@ -44,12 +44,12 @@ test('creating a post requires signing in', async ({ page }) => {
 	await expect(page).toHaveURL(/\/login$/);
 });
 
-test('the board API rejects a malformed cursor but serves the first page', async ({ request }) => {
+test('the feed API rejects a malformed cursor but serves the first page', async ({ request }) => {
 	const malformed = await request.get(
-		'/api/board?cursor_created=2026-01-01),or(moderation_state.eq.held&cursor_id=not-a-uuid'
+		'/api/feed?cursor_created=2026-01-01),or(moderation_state.eq.held&cursor_id=not-a-uuid'
 	);
 	expect(malformed.status()).toBe(400);
 
-	const firstPage = await request.get('/api/board');
+	const firstPage = await request.get('/api/feed');
 	expect(firstPage.status()).toBe(200);
 });

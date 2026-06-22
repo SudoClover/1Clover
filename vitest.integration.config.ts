@@ -8,6 +8,9 @@ export default defineConfig({
 		environment: 'node',
 		setupFiles: ['dotenv/config'],
 		testTimeout: 20000,
-		hookTimeout: 20000
+		hookTimeout: 20000,
+		// Files share one local DB with no per-test isolation, so run them serially: parallel
+		// files creating posts concurrently would break recency-ordering assertions (feeds/board).
+		fileParallelism: false
 	}
 });

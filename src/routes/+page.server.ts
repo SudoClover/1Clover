@@ -1,15 +1,46 @@
 import { getBoardPage } from '$lib/server/db/posts';
+import { getFollowingFeedPage, getHotFeedPage, getTopFeedPage } from '$lib/server/db/feeds';
+import { parseFeedMode, parseTopWindow } from '$lib/domain/feed/request';
+import type { BoardCursor, FeedMode, HotCursor, TopWindow } from '$lib/domain/feed/types';
+import type { BoardCard } from '$lib/domain/posts/types';
 import type { PageServerLoad } from './$types';
 
-// The public board: approved posts, newest first, each with a cover thumbnail. RLS
-// already restricts anonymous/other users to approved posts; the query mirrors that.
-// A read failure shows an empty board rather than 500-ing the homepage.
-export const load: PageServerLoad = async ({ locals }) => {
+interface FeedPage {
+	cards: BoardCard[];
+	nextCursor: BoardCursor | HotCursor | null;
+}
+
+// The board, in the selected feed mode. RLS + the approved-only filter keep non-approved
+// and other users' content out; a read failure shows an empty feed rather than 500-ing.
+export const load: PageServerLoad = async ({ url, locals }) => {
+	const mode = parseFeedMode(url.searchParams.get('mode'));
+	const topWindow = parseTopWindow(url.searchParams.get('window'));
+
 	try {
-		const { cards, nextCursor } = await getBoardPage(locals.supabase);
-		return { cards, nextCursor };
+		const page = await loadFeed(locals, mode, topWindow);
+		return { ...page, mode, topWindow };
 	} catch (e) {
-		console.error('[board] post query failed:', (e as Error).message);
-		return { cards: [], nextCursor: null };
+		console.error(`[feed:${mode}] load failed:`, (e as Error).message);
+		return { cards: [], nextCursor: null, mode, topWindow };
 	}
 };
+
+async function loadFeed(
+	locals: App.Locals,
+	mode: FeedMode,
+	topWindow: TopWindow
+): Promise<FeedPage> {
+	switch (mode) {
+		case 'hot':
+			return getHotFeedPage(locals.supabase, null);
+		case 'top':
+			return getTopFeedPage(locals.supabase, topWindow, null);
+		case 'following': {
+			const viewerId = locals.claims?.sub;
+			if (!viewerId) return { cards: [], nextCursor: null };
+			return getFollowingFeedPage(locals.supabase, viewerId, null);
+		}
+		default:
+			return getBoardPage(locals.supabase, null);
+	}
+}

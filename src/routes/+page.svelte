@@ -1,32 +1,44 @@
 <script lang="ts">
 	import Masonry from '$lib/components/Masonry.svelte';
 	import PostCard from '$lib/components/PostCard.svelte';
-	import type { BoardCard, BoardCursor, BoardPage } from '$lib/domain/posts/types';
+	import FeedSwitcher from '$lib/components/FeedSwitcher.svelte';
+	import type { BoardCard } from '$lib/domain/posts/types';
+	import type { BoardCursor, HotCursor } from '$lib/domain/feed/types';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 
-	// Seeded from the server-rendered page; the $effect below re-syncs on a fresh load,
-	// while loadMore() appends to these without resetting them.
+	type FeedCursor = BoardCursor | HotCursor;
+
+	// Seeded from the server-rendered page; the $effect re-syncs on a fresh load (e.g.
+	// switching feed tabs), while loadMore() appends to these without resetting them.
 	// svelte-ignore state_referenced_locally
 	let cards = $state<BoardCard[]>(data.cards);
 	// svelte-ignore state_referenced_locally
-	let cursor = $state<BoardCursor | null>(data.nextCursor);
+	let cursor = $state<FeedCursor | null>(data.nextCursor);
 	let loading = $state(false);
 
-	// Re-sync when the server load runs again (e.g. navigating back to the board).
 	$effect(() => {
 		cards = data.cards;
 		cursor = data.nextCursor;
 	});
 
+	// Echo the server-issued cursor back as query params, matching the feed's keyset:
+	// Hot carries only the last id; the others add (created_at, id). Built in one shot (no
+	// mutation) so it stays a plain query string, not reactive state.
+	function feedQuery(c: FeedCursor): string {
+		const params: Record<string, string> = { mode: data.mode, cursor_id: c.id };
+		if (data.mode === 'top') params.window = data.topWindow;
+		if ('createdAt' in c) params.cursor_created = c.createdAt;
+		return new URLSearchParams(params).toString();
+	}
+
 	async function loadMore() {
 		if (loading || !cursor) return;
 		loading = true;
-		const params = new URLSearchParams({ cursor_created: cursor.createdAt, cursor_id: cursor.id });
-		const res = await fetch(`/api/board?${params}`);
+		const res = await fetch(`/api/feed?${feedQuery(cursor)}`);
 		if (res.ok) {
-			const page: BoardPage = await res.json();
+			const page: { cards: BoardCard[]; nextCursor: FeedCursor | null } = await res.json();
 			cards = [...cards, ...page.cards];
 			cursor = page.nextCursor;
 		}
@@ -40,6 +52,16 @@
 		});
 		observer.observe(node);
 		return { destroy: () => observer.disconnect() };
+	}
+
+	function emptyMessage(): string {
+		if (data.mode === 'following') {
+			return data.signedIn
+				? "You're not following anyone yet. Follow creators to see their posts here."
+				: 'Sign in to see posts from creators you follow.';
+		}
+		if (data.mode === 'top') return 'No posts in this window yet.';
+		return 'No posts on the board yet.';
 	}
 </script>
 
@@ -58,8 +80,10 @@
 		{/if}
 	</header>
 
+	<FeedSwitcher mode={data.mode} topWindow={data.topWindow} signedIn={data.signedIn} />
+
 	{#if cards.length === 0}
-		<p class="empty">No posts on the board yet.</p>
+		<p class="empty">{emptyMessage()}</p>
 	{:else}
 		<Masonry>
 			{#each cards as card (card.id)}
